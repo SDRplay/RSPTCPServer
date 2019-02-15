@@ -1,0 +1,6 @@
+
+Win32 build requires pthreads-win32 available from:
+
+https://www.sourceware.org/pthreads-win32/
+
+Extract package to ..\pthread-win32 relative to source.
