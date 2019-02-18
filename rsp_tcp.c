@@ -1033,6 +1033,28 @@ static int set_gain_by_index(unsigned int index)
 	return r;
 }
 
+static int set_gain(unsigned int db)
+{
+	int p;
+	unsigned int index;
+
+	// quantise R820T gains in tenths of dB into indexes 
+	p = ((9 + db) / 5);
+	
+	// clamp
+	if (p > 100)
+	{
+		p = 100;
+	}
+	if (p < 0)
+	{
+		p = 0;
+	}
+	
+	index = (unsigned int) (((GAIN_STEPS-1) / 100.0f) * p);
+	return set_gain_by_index(index);
+}
+
 static int set_tuner_gain_mode(unsigned int mode)
 {
 	int r;
@@ -1251,6 +1273,7 @@ static void *command_worker(void *arg)
 			break;
 		case 0x04:
 			printf("set gain %d\n", ntohl(cmd.param));
+			set_gain(ntohl(cmd.param));
 			break;
 		case 0x05:
 			printf("set freq correction %d\n", ntohl(cmd.param));
