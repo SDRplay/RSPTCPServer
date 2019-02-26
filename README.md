@@ -1,6 +1,6 @@
 # rsp_tcp
 
-This is a fork of the original rsp_tcp by F4FHH Nicolas with extensions to support all current RSP devices. 
+This is a fork of the original rsp_tcp by F4FHH Nicolas with extensions to support all current RSP devices. Use the extended mode to access the full bit rate of the RSP and all of the RSP specific controls. By default the server supports the RTL TCP protocol.
 
 (c)2018 F4FHH Nicolas (f4fhh@ducor.fr). Licensed under the GNU GPL V3
 
@@ -26,6 +26,7 @@ As the rtl_tcp protocol is only 8 bits IQ, man will loose the major advantage of
  -s samplerate in Hz (default: 2048000 Hz)
  -n max number of linked list buffers to keep (default: 500)
  -v Verbose output (debug) enable (default: disabled)
+ -E extended mode full RSP bit rate and controls (default: RTL mode)
 ```
 ## USAGE
  - RTL Tuner AGC is mapped to RSP RF AGC
