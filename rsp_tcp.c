@@ -1376,7 +1376,7 @@ static void *command_worker(void *arg)
 
 int init_rsp_device(unsigned int sr, unsigned int freq, int enable_bias_t, unsigned int notch, int enable_refout, int antenna)
 {
-	int r;
+	int r, dec;
 	uint8_t ifgain, lnastate;
 
 	// initialise frequency state
@@ -1388,13 +1388,37 @@ int init_rsp_device(unsigned int sr, unsigned int freq, int enable_bias_t, unsig
 		gain_reduction = ifgain;
 		lna_state = lnastate;
 	}
-
+	
+	if (sr < 300e3) { bwType = mir_sdr_BW_0_200; }
+	else if (sr < 600e3) { bwType = mir_sdr_BW_0_300; }
+	else if (sr < 1536e3) { bwType = mir_sdr_BW_0_600; }
+	else if (sr < 5e6) { bwType = mir_sdr_BW_1_536; }
+	else if (sr < 6e6) { bwType = mir_sdr_BW_5_000; }
+	else if (sr < 7e6) { bwType = mir_sdr_BW_6_000; }
+	else if (sr < 8e6) { bwType = mir_sdr_BW_7_000; }
+	else { bwType = mir_sdr_BW_8_000; }
+	
+	dec = 1;
+	if (sr < 2e6)
+	{
+		while (sr < 2e6)
+		{
+			sr = sr * 2;
+			dec = dec * 2;
+		}
+	}
+	
 	r = mir_sdr_StreamInit(&gain_reduction, (sr / 1e6), (freq / 1e6), bwType, mir_sdr_IF_Zero,
 		lna_state, &infoOverallGr, mir_sdr_USE_RSP_SET_GR,
 		&samples_per_packet, rx_callback, gc_callback, (void *)NULL);
 	if (r != mir_sdr_Success) {
 		fprintf(stderr, "failed to start the RSP device, return (%d)\n", r);
 		return -1;
+	}
+	
+	if (dec > 1)
+	{
+		mir_sdr_DecimateControl(1, dec, 1);
 	}
 
 	printf("started rx\n");
