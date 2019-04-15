@@ -1925,9 +1925,7 @@ int init_rsp_device(unsigned int sr, unsigned int freq, int enable_bias_t, unsig
 void usage(void)
 {
 	printf("rsp_tcp, an I/Q spectrum server for SDRPlay receivers "
-#ifdef SERVER_VERSION
 		"VERSION "SERVER_VERSION
-#endif
 		"\n\n"
 		"Usage:\t[-a listen address]\n"
 		"\t[-p listen port (default: 1234)]\n"
@@ -1982,7 +1980,7 @@ int main(int argc, char **argv)
 	struct sigaction sigact, sigign;
 #endif
 
-	printf("rsp_tcp version %d.%d\n\n", RSP_TCP_VERSION_MAJOR, RSP_TCP_VERSION_MINOR);
+	printf("rsp_tcp version %s\n\n", SERVER_VERSION);
 
 	while ((opt = getopt(argc, argv, "a:p:f:b:s:n:d:P:TvADBFRE")) != -1) {
 		switch (opt) {
