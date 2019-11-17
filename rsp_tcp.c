@@ -445,8 +445,10 @@ void rx_callback(short* xi, short* xq, unsigned int firstSampleNum, int grChange
 			char *data;
 			data = rpt->data;
 			for (i = 0; i < numSamples; i++, xi++, xq++) {
-				*(data++) = (unsigned char)(((*xi << sample_shift) >> 8) + 128);
-				*(data++) = (unsigned char)(((*xq << sample_shift) >> 8) + 128);
+				// Calculation to 8 bit was wrong, this one is correct and better. Bas ON5HB.
+				*(data++) = (unsigned char)(((*xi << 1) + 16384) / 128) + 0.5;
+				*(data++) = (unsigned char)(((*xq << 1) + 16384) / 128) + 0.5;
+				
 			}
 
 			rpt->len = 2 * numSamples;
