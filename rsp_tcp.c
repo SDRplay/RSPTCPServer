@@ -39,7 +39,7 @@
 #define CTRL_C_EVENT        0
 #define CTRL_BREAK_EVENT    1
 #define CTRL_CLOSE_EVENT    2
-#include <stdbool.h>
+#define BOOL bool
 #define FALSE false
 #define TRUE true
 #else
