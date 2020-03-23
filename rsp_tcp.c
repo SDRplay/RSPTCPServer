@@ -36,6 +36,12 @@
 #include <sys/time.h>
 #include <netinet/in.h>
 #include <fcntl.h>
+#define CTRL_C_EVENT        0
+#define CTRL_BREAK_EVENT    1
+#define CTRL_CLOSE_EVENT    2
+#include <stdbool.h>
+#define FALSE false
+#define TRUE true
 #else
 #include <winsock2.h>
 #include "getopt/getopt.h"
