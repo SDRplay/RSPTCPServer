@@ -39,9 +39,6 @@
 #define CTRL_C_EVENT        0
 #define CTRL_BREAK_EVENT    1
 #define CTRL_CLOSE_EVENT    2
-#define BOOL bool
-#define FALSE false
-#define TRUE true
 #else
 #include <winsock2.h>
 #include "getopt/getopt.h"
@@ -499,29 +496,29 @@ void* AGCLoop(void* arg)
 	while(chParams->ctrlParams.agc.enable != sdrplay_api_AGC_DISABLE)
 	{
 		loopRunning = 1;
-		BOOL updateGain = FALSE;
+		int updateGain = 0;
 		if (((clock() - t) / CLOCKS_PER_SEC) > 0.1)
 		{
 			if (chParams->tunerParams.gain.gRdB == 20 && chParams->tunerParams.gain.LNAstate > 0)
 			{
 				chParams->tunerParams.gain.LNAstate--;
-				updateGain = TRUE;
+				updateGain = 1;
 			}
 			else if (chParams->tunerParams.gain.gRdB == 59 || overload == 1)
 			{
 				if (chParams->tunerParams.gain.LNAstate < max_lnastate)
 				{
 					chParams->tunerParams.gain.LNAstate++;
-					updateGain = TRUE;
+					updateGain = 1;
 				}
 			}
 			else if(chParams->tunerParams.gain.LNAstate > 0)
 			{
 				chParams->tunerParams.gain.LNAstate--;
-				updateGain = TRUE;
+				updateGain = 1;
 			}
 
-			if (updateGain)
+			if (updateGain == 1)
 			{
 				sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Tuner_Gr, sdrplay_api_Update_Ext1_None);
 				t = clock();
