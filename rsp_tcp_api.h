@@ -89,6 +89,9 @@ typedef struct {
 	unsigned int sample_format;
 
 	unsigned char antenna_input_count;
+	char third_antenna_name[13];
+	int third_antenna_freq_limit;
+
 	unsigned char tuner_count;	
 	unsigned char ifgr_min;
 	unsigned char ifgr_max;

@@ -2,6 +2,8 @@
 
 This is a fork of the original rsp_tcp by F4FHH Nicolas with extensions to support all current RSP devices. Use the extended mode to access the full bit rate of the RSP and all of the RSP specific controls. By default the server supports the RTL TCP protocol.
 
+February 2019: Added support for SDRplay API 3.07 (support all RSPs including RSPdx)
+
 (c)2018 F4FHH Nicolas (f4fhh@ducor.fr). Licensed under the GNU GPL V3
 
 ## a rtl_tcp compatible IQ server for the RSP range of SDRPlay SDR
