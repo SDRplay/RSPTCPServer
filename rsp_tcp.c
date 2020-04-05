@@ -63,13 +63,14 @@ typedef int socklen_t;
 
 static SOCKET s;
 
+static int fsc = 0;
+static int rfc = 0;
+static int grc = 0;
 static pthread_t tcp_worker_thread;
 static pthread_t command_thread;
 
 static pthread_mutex_t ll_mutex;
 static pthread_cond_t cond;
-
-static pthread_t ptid;
 
 struct llist {
 	char *data;
@@ -116,8 +117,6 @@ static int global_numq = 0;
 static struct llist *ll_buffers = 0;
 static int llbuf_num = 500;
 
-static clock_t t;
-static int loopRunning = 0;
 static int overload = 0;
 
 static volatile int do_exit = 0;
@@ -139,8 +138,6 @@ static volatile int ctrlC_exit = 0;
 #define RTLSDR_TUNER_R820T 5
 
 static int bwType = sdrplay_api_BW_Undefined;
-static int infoOverallGr;
-static int samples_per_packet;
 static int last_gain_idx = 0;
 static int verbose = 0;
 static uint8_t max_lnastate;
@@ -437,8 +434,6 @@ static int lna_state = DEFAULT_LNA_STATE;
 static int agc_state = DEFAULT_AGC_STATE;
 static int agc_set_point = DEFAULT_AGC_SETPOINT;
 static int gain_reduction = DEFAULT_GAIN_REDUCTION;
-static int am_port = -1;
-static uint8_t const_if_gain = 12;
 static int sample_shift = 2;
 
 // *************************************
@@ -489,53 +484,8 @@ static void sighandler(int signum)
 }
 #endif
 
-void* AGCLoop(void* arg)
-{
-	pthread_detach(pthread_self());
-
-	while(chParams->ctrlParams.agc.enable != sdrplay_api_AGC_DISABLE)
-	{
-		loopRunning = 1;
-		int updateGain = 0;
-		if (((clock() - t) / CLOCKS_PER_SEC) > 0.1)
-		{
-			if (chParams->tunerParams.gain.gRdB == 20 && chParams->tunerParams.gain.LNAstate > 0)
-			{
-				chParams->tunerParams.gain.LNAstate--;
-				updateGain = 1;
-			}
-			else if (chParams->tunerParams.gain.gRdB == 59 || overload == 1)
-			{
-				if (chParams->tunerParams.gain.LNAstate < max_lnastate)
-				{
-					chParams->tunerParams.gain.LNAstate++;
-					updateGain = 1;
-				}
-			}
-			else if(chParams->tunerParams.gain.LNAstate > 0)
-			{
-				chParams->tunerParams.gain.LNAstate--;
-				updateGain = 1;
-			}
-
-			if (updateGain == 1)
-			{
-				sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Tuner_Gr, sdrplay_api_Update_Ext1_None);
-				t = clock();
-			}
-		}
-	}
-	loopRunning = 0;
-	printf("AGC loop thread exit\n");
-	pthread_exit(NULL);
-	return 0;
-}
-
 void event_callback(sdrplay_api_EventT eventId, sdrplay_api_TunerSelectT tunerS, sdrplay_api_EventParamsT *params, void* cbContext)
 {
-	(void *)tunerS;
-	(void *)cbContext;
-
 	switch (eventId)
 	{
 	case sdrplay_api_GainChange:
@@ -559,18 +509,31 @@ void event_callback(sdrplay_api_EventT eventId, sdrplay_api_TunerSelectT tunerS,
 		}
 		break;
 	case sdrplay_api_DeviceRemoved:
-		printf("RSP removed");
+		printf("RSP removed\n");
 		sdrplay_api_Uninit(chosenDev->dev);
 		sdrplay_api_ReleaseDevice(chosenDev);
 		sdrplay_api_Close();
 		exit(1);
+	case sdrplay_api_RspDuoModeChange:
+		printf("RSPduo mode changed\n");
+		break;
 	}
 }
 
 void rxa_callback(short* xi, short* xq, sdrplay_api_StreamCbParamsT *params, unsigned int numSamples, unsigned int reset, void* cbContext)
 {
-	(void *)cbContext;
-	(void *)params;
+	if(params->fsChanged != 0)
+	{
+		fsc = params->fsChanged;
+	}
+	if(params->rfChanged != 0)
+	{
+		rfc = params->rfChanged;
+	}
+	if(params->grChanged != 0)
+	{
+		grc = params->grChanged;
+	}
 
 	if (!do_exit) {
 		unsigned int i;
@@ -644,9 +607,6 @@ void rxa_callback(short* xi, short* xq, sdrplay_api_StreamCbParamsT *params, uns
 
 void rxb_callback(short* xi, short* xq, sdrplay_api_StreamCbParamsT *params, unsigned int numSamples, unsigned int reset, void* cbContext)
 {
-	(void *)cbContext;
-	(void *)params;
-
 	if (!do_exit) {
 		unsigned int i;
 		struct llist *rpt = (struct llist*)malloc(sizeof(struct llist));
@@ -868,8 +828,6 @@ static rsp_capabilities_t *model_to_capabilities(rsp_model_t model)
 
 static int gain_index_to_gain(unsigned int index, uint8_t *if_gr_out, uint8_t *lna_state_out)
 {
-	uint8_t max_gr = hardware_caps->max_ifgr;
-	uint8_t min_gr = hardware_caps->min_ifgr;
 	const uint8_t *if_gains;
 	const uint8_t *lnastates;
 
@@ -920,10 +878,6 @@ static int gain_index_to_gain(unsigned int index, uint8_t *if_gr_out, uint8_t *l
 	if (if_gains && lnastates) {
 
 		max_lnastate = lnastates[0];
-//		uint8_t if_gr = max_gr - (const_if_gain + if_gains[index]);
-//		if (if_gr < min_gr) {
-//			if_gr = min_gr;
-//		}
 		uint8_t if_gr = if_gains[index];
 
 		*if_gr_out = if_gr;
@@ -951,15 +905,6 @@ static int apply_agc_settings()
 		printf("agc control error (%d)\n", r);
 	}
 
-/*	if (agc != sdrplay_api_AGC_DISABLE)
-	{
-		if (loopRunning == 0)
-		{
-			printf("create AGC loop thread\n");
-			pthread_create(&ptid, NULL, &AGCLoop, NULL);
-		}
-	} */
-
 	return r;
 }
 
@@ -970,9 +915,26 @@ static int apply_gain_settings()
 	chParams->tunerParams.gain.gRdB = gain_reduction;
 	chParams->tunerParams.gain.LNAstate = lna_state;
 
-	r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Tuner_Gr, sdrplay_api_Update_Ext1_None);
-	if (r != sdrplay_api_Success) {
-		printf("set gain reduction error (%d)\n", r);
+	grc = 0;
+	int count = 0;
+	sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Tuner_Gr, sdrplay_api_Update_Ext1_None);
+
+	while(count < 1000)
+	{
+		if(grc != 0)
+		{
+			printf("GR updated in %d ms\n", count);
+			r = 0;
+			break;
+		}
+		usleep(1000);
+		count++;
+	}
+
+	if(count >= 1000)
+	{
+		printf("GR failed to update in 1 second\n");
+		r = 1;
 	}
 
 	return r;
@@ -1106,7 +1068,7 @@ static int set_antenna_input(unsigned int antenna)
 {
 	if (hardware_model == RSP_MODEL_RSP2 || hardware_model == RSP_MODEL_RSPDUO || hardware_model == RSP_MODEL_RSPDX)
 	{
-		int r, new_am_port = 0;
+		int r;
 		sdrplay_api_ReasonForUpdateT reason1 = sdrplay_api_Update_None;
 		sdrplay_api_ReasonForUpdateExtension1T reason2 = sdrplay_api_Update_Ext1_None;
 		switch (antenna)
@@ -1142,7 +1104,6 @@ static int set_antenna_input(unsigned int antenna)
 				reason2 = sdrplay_api_Update_RspDx_AntennaControl;
 			}
 
-			new_am_port = 0;
 			break;
 
 		case RSP_TCP_ANTENNA_INPUT_B:
@@ -1171,7 +1132,6 @@ static int set_antenna_input(unsigned int antenna)
 				reason2 = sdrplay_api_Update_RspDx_AntennaControl;
 			}
 
-			new_am_port = 0;
 			break;
 
 		case RSP_TCP_ANTENNA_INPUT_HIZ:
@@ -1212,7 +1172,6 @@ static int set_antenna_input(unsigned int antenna)
 				}
 			}
 
-			new_am_port = 1;
 			break;
 		}
 
@@ -1338,9 +1297,27 @@ static int set_gain_by_index(unsigned int index)
 	chParams->tunerParams.gain.gRdB = if_gr;
 	chParams->tunerParams.gain.LNAstate = lnastate;
 
-	r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Tuner_Gr, sdrplay_api_Update_Ext1_None);
-	if (r != sdrplay_api_Success) {
-		printf("set gain reduction returned (%d)\n", r);
+	grc = 0;
+	int count = 0;
+
+	sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Tuner_Gr, sdrplay_api_Update_Ext1_None);
+
+	while(count < 1000)
+	{
+		if(grc != 0)
+		{
+			printf("GR updated in %d ms\n", count);
+			r = 0;
+			break;
+		}
+		usleep(1000);
+		count++;
+	}
+
+	if(count >= 1000)
+	{
+		printf("GR failed to update in 1 second\n");
+		r = 1;
 	}
 
 	apply_agc_settings();
@@ -1378,7 +1355,27 @@ static int set_tuner_gain_mode(unsigned int mode)
 	if (mode) {
 		chParams->ctrlParams.agc.enable = sdrplay_api_AGC_DISABLE;
 		chParams->tunerParams.gain.LNAstate = lna_state;
-		r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Ctrl_Agc | sdrplay_api_Update_Tuner_Gr, sdrplay_api_Update_Ext1_None);
+		grc = 0;
+		int count = 0;
+		sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Ctrl_Agc | sdrplay_api_Update_Tuner_Gr, sdrplay_api_Update_Ext1_None);
+		while(count < 1000)
+		{
+			if(grc != 0)
+			{
+				printf("GR updated in %d ms\n", count);
+				r = 0;
+				break;
+			}
+			usleep(1000);
+			count++;
+		}
+
+		if(count >= 1000)
+		{
+			printf("GR failed to update in 1 second\n");
+			r = 1;
+		}
+
 		set_gain_by_index(last_gain_idx);
 		printf("agc disabled\n");
 	}
@@ -1386,12 +1383,29 @@ static int set_tuner_gain_mode(unsigned int mode)
 		chParams->ctrlParams.agc.enable = sdrplay_api_AGC_100HZ;
 		chParams->ctrlParams.agc.setPoint_dBfs = agc_set_point;
 		chParams->tunerParams.gain.LNAstate = lna_state;
-		r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Ctrl_Agc | sdrplay_api_Update_Tuner_Gr, sdrplay_api_Update_Ext1_None);
-		printf("agc enabled\n");
-	}
 
-	if (r != sdrplay_api_Success) {
-		printf("tuner gain (agc) control error (%d)\n", r);
+		grc = 0;
+		int count = 0;
+		sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Ctrl_Agc | sdrplay_api_Update_Tuner_Gr, sdrplay_api_Update_Ext1_None);
+		while(count < 1000)
+		{
+			if(grc != 0)
+			{
+				printf("GR updated in %d ms\n", count);
+				r = 0;
+				break;
+			}
+			usleep(1000);
+			count++;
+		}
+
+		if(count >= 1000)
+		{
+			printf("GR failed to update in 1 second\n");
+			r = 1;
+		}
+
+		printf("agc enabled\n");
 	}
 
 	return r;
@@ -1423,11 +1437,26 @@ static int set_freq(uint32_t f)
 
 	chParams->tunerParams.rfFreq.rfHz = f;
 
-	r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Tuner_Frf, sdrplay_api_Update_Ext1_None);
-	if (r != sdrplay_api_Success) {
-		if (verbose) {
-			printf("set freq returned (%d)\n", r);
+	rfc = 0;
+	int count = 0;
+	sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Tuner_Frf, sdrplay_api_Update_Ext1_None);
+
+	while (count < 1000)
+	{
+		if(rfc != 0)
+		{
+			r = 0;
+			printf("Frequency updated in %d ms\n", count);
+			break;
 		}
+		usleep(1000);
+		count++;
+	}
+
+	if(count >= 1000)
+	{
+		r = 1;
+		printf("Frequency failed to update in 1 second\n");
 	}
 
 	apply_agc_settings();
@@ -1525,10 +1554,25 @@ static int set_sample_rate(uint32_t sr)
 
 	printf("device SR %.2f, decim %d, output SR %u, IF Filter BW %d kHz\n", f, decimation, sr, bwType);
 
-	r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Dev_Fs | sdrplay_api_Update_Ctrl_Decimation, sdrplay_api_Update_Ext1_None);
+	fsc = 0;
+	int count = 0;
 
-	if (r != sdrplay_api_Success) {
-		printf("set sample rate error (%d)\n", r);
+	sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Dev_Fs | sdrplay_api_Update_Ctrl_Decimation, sdrplay_api_Update_Ext1_None);
+
+	while(count < 2000)
+	{
+		if(fsc != 0)
+		{
+			printf("Sample rate changed after %d ms\n", count);
+			break;
+		}
+		usleep(1000);
+		count++;
+	}
+
+	if(count >= 2000)
+	{
+		printf("Sample rate not changed after 2 seconds\n");
 	}
 
 	r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Tuner_BwType, sdrplay_api_Update_Ext1_None);
@@ -1824,7 +1868,6 @@ void usage(void)
 int main(int argc, char **argv)
 {
 	int r, opt;
-	unsigned int i;
 	char* addr = "127.0.0.1";
 	int port = 1234;
 	uint32_t frequency = DEFAULT_FREQUENCY, samp_rate = DEFAULT_SAMPLERATE;
@@ -1848,8 +1891,6 @@ int main(int argc, char **argv)
 	int enable_biastee = 0;
 	int enable_refout = 0;
 	int bit_depth = 8;
-
-	t = clock();
 
 #ifdef _WIN32
 	WSADATA wsd;
