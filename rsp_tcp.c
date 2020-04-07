@@ -66,6 +66,7 @@ static SOCKET s;
 static int fsc = 0;
 static int rfc = 0;
 static int grc = 0;
+static int timeout = 500;
 static pthread_t tcp_worker_thread;
 static pthread_t command_thread;
 
@@ -134,7 +135,7 @@ static volatile int ctrlC_exit = 0;
 #define DEFAULT_AGC_SETPOINT -30
 #define DEFAULT_GAIN_REDUCTION 40
 #define DEFAULT_LNA_STATE 4
-#define DEFAULT_AGC_STATE 0
+#define DEFAULT_AGC_STATE 1
 #define RTLSDR_TUNER_R820T 5
 
 static int bwType = sdrplay_api_BW_Undefined;
@@ -525,46 +526,52 @@ void rxa_callback(short* xi, short* xq, sdrplay_api_StreamCbParamsT *params, uns
 	if(params->fsChanged != 0)
 	{
 		fsc = params->fsChanged;
+		printf("params->fsChanged = %d\n", params->fsChanged);
 	}
 	if(params->rfChanged != 0)
 	{
 		rfc = params->rfChanged;
+		printf("params->rfChanged = %d\n", params->rfChanged);
 	}
 	if(params->grChanged != 0)
 	{
 		grc = params->grChanged;
+		printf("params->grChanged = %d\n", params->grChanged);
 	}
 
 	if (!do_exit) {
 		unsigned int i;
 		struct llist *rpt = (struct llist*)malloc(sizeof(struct llist));
 
-		if (sample_format == RSP_TCP_SAMPLE_FORMAT_UINT8) {
+		if (sample_format == RSP_TCP_SAMPLE_FORMAT_UINT8)
+		{
 			rpt->data = (char*)malloc(2 * numSamples);
 
 			// assemble the data
 			char *data;
 			data = rpt->data;
-			for (i = 0; i < numSamples; i++, xi++, xq++) {
+			for (i = 0; i < numSamples; i++, xi++, xq++)
+			{
 				*(data++) = (unsigned char)(((*xi << sample_shift) >> 8) + 128);
 				*(data++) = (unsigned char)(((*xq << sample_shift) >> 8) + 128);
 			}
 
 			rpt->len = 2 * numSamples;
 		}
-		else
-			if (sample_format == RSP_TCP_SAMPLE_FORMAT_INT16) {
-				rpt->data = (char*)malloc(4 * numSamples);
+		else if (sample_format == RSP_TCP_SAMPLE_FORMAT_INT16)
+		{
+			rpt->data = (char*)malloc(4 * numSamples);
 
-				short *data;
-				data = (short*)rpt->data;
-				for (i = 0; i < numSamples; i++, xi++, xq++) {
-					*(data++) = *xi;
-					*(data++) = *xq;
-				}
-
-				rpt->len = 4 * numSamples;
+			short *data;
+			data = (short*)rpt->data;
+			for (i = 0; i < numSamples; i++, xi++, xq++)
+			{
+				*(data++) = *xi;
+				*(data++) = *xq;
 			}
+
+			rpt->len = 4 * numSamples;
+		}
 
 		rpt->next = NULL;
 
@@ -592,12 +599,12 @@ void rxa_callback(short* xi, short* xq, sdrplay_api_StreamCbParamsT *params, uns
 			}
 
 			cur->next = rpt;
-			if (verbose) {
-				if (num_queued > global_numq)
-					printf("ll+, now %d\n", num_queued);
-				else if (num_queued < global_numq)
-					printf("ll-, now %d\n", num_queued);
-			}
+			//if (verbose) {
+			//	if (num_queued > global_numq)
+			//		printf("ll+, now %d\n", num_queued);
+			//	else if (num_queued < global_numq)
+			//		printf("ll-, now %d\n", num_queued);
+			//}
 			global_numq = num_queued;
 		}
 		pthread_cond_signal(&cond);
@@ -724,7 +731,11 @@ static void *tcp_worker(void *arg)
 					index += bytessent;
 				}
 				if (bytessent == SOCKET_ERROR || do_exit) {
-					printf("worker socket bye\n");
+#ifdef _WIN32
+					printf("worker socket bye (%d), do_exit:%d\n", WSAGetLastError(), do_exit);
+#else
+					printf("worker socket bye, do_exit:%d\n", do_exit);
+#endif
 					sighandler(CTRL_CLOSE_EVENT);
 					pthread_exit(NULL);
 				}
@@ -900,6 +911,8 @@ static int apply_agc_settings()
 	chParams->ctrlParams.agc.decay_delay_ms = 200;
 	chParams->ctrlParams.agc.decay_threshold_dB = 5;
 
+	printf("apply agc settings - enable:%d\n", agc);
+
 	r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Ctrl_Agc, sdrplay_api_Update_Ext1_None);
 	if (r != sdrplay_api_Success) {
 		printf("agc control error (%d)\n", r);
@@ -919,7 +932,7 @@ static int apply_gain_settings()
 	int count = 0;
 	sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Tuner_Gr, sdrplay_api_Update_Ext1_None);
 
-	while(count < 1000)
+	while(count < timeout)
 	{
 		if(grc != 0)
 		{
@@ -927,13 +940,17 @@ static int apply_gain_settings()
 			r = 0;
 			break;
 		}
+#ifdef _WIN32
+		Sleep(1);
+#else
 		usleep(1000);
+#endif
 		count++;
 	}
 
-	if(count >= 1000)
+	if(count >= timeout)
 	{
-		printf("GR failed to update in 1 second\n");
+		printf("GR failed to update in %.1f seconds\n", (timeout / 1000.0));
 		r = 1;
 	}
 
@@ -1302,7 +1319,7 @@ static int set_gain_by_index(unsigned int index)
 
 	sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Tuner_Gr, sdrplay_api_Update_Ext1_None);
 
-	while(count < 1000)
+	while(count < timeout)
 	{
 		if(grc != 0)
 		{
@@ -1310,13 +1327,17 @@ static int set_gain_by_index(unsigned int index)
 			r = 0;
 			break;
 		}
+#ifdef _WIN32
+		Sleep(1);
+#else
 		usleep(1000);
+#endif
 		count++;
 	}
 
-	if(count >= 1000)
+	if(count >= timeout)
 	{
-		printf("GR failed to update in 1 second\n");
+		printf("GR failed to update in %.1f seconds\n", (timeout / 1000.0));
 		r = 1;
 	}
 
@@ -1358,7 +1379,7 @@ static int set_tuner_gain_mode(unsigned int mode)
 		grc = 0;
 		int count = 0;
 		sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Ctrl_Agc | sdrplay_api_Update_Tuner_Gr, sdrplay_api_Update_Ext1_None);
-		while(count < 1000)
+		while(count < timeout)
 		{
 			if(grc != 0)
 			{
@@ -1366,13 +1387,17 @@ static int set_tuner_gain_mode(unsigned int mode)
 				r = 0;
 				break;
 			}
+#ifdef _WIN32
+			Sleep(1);
+#else
 			usleep(1000);
+#endif
 			count++;
 		}
 
-		if(count >= 1000)
+		if(count >= timeout)
 		{
-			printf("GR failed to update in 1 second\n");
+			printf("GR failed to update in %.1f seconds\n", (timeout / 1000.0));
 			r = 1;
 		}
 
@@ -1387,7 +1412,7 @@ static int set_tuner_gain_mode(unsigned int mode)
 		grc = 0;
 		int count = 0;
 		sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Ctrl_Agc | sdrplay_api_Update_Tuner_Gr, sdrplay_api_Update_Ext1_None);
-		while(count < 1000)
+		while(count < timeout)
 		{
 			if(grc != 0)
 			{
@@ -1395,13 +1420,17 @@ static int set_tuner_gain_mode(unsigned int mode)
 				r = 0;
 				break;
 			}
+#ifdef _WIN32
+			Sleep(1);
+#else
 			usleep(1000);
+#endif
 			count++;
 		}
 
-		if(count >= 1000)
+		if(count >= timeout)
 		{
-			printf("GR failed to update in 1 second\n");
+			printf("GR failed to update in %.1f seconds\n", (timeout / 1000.0));
 			r = 1;
 		}
 
@@ -1441,7 +1470,7 @@ static int set_freq(uint32_t f)
 	int count = 0;
 	sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Tuner_Frf, sdrplay_api_Update_Ext1_None);
 
-	while (count < 1000)
+	while (count < timeout)
 	{
 		if(rfc != 0)
 		{
@@ -1449,14 +1478,18 @@ static int set_freq(uint32_t f)
 			printf("Frequency updated in %d ms\n", count);
 			break;
 		}
+#ifdef _WIN32
+		Sleep(1);
+#else
 		usleep(1000);
+#endif
 		count++;
 	}
 
-	if(count >= 1000)
+	if(count >= timeout)
 	{
 		r = 1;
-		printf("Frequency failed to update in 1 second\n");
+		printf("Frequency failed to update in %.1f seconds\n", (timeout / 1000.0));
 	}
 
 	apply_agc_settings();
@@ -1559,20 +1592,24 @@ static int set_sample_rate(uint32_t sr)
 
 	sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Dev_Fs | sdrplay_api_Update_Ctrl_Decimation, sdrplay_api_Update_Ext1_None);
 
-	while(count < 2000)
+	while(count < timeout)
 	{
 		if(fsc != 0)
 		{
 			printf("Sample rate changed after %d ms\n", count);
 			break;
 		}
+#ifdef _WIN32
+		Sleep(1);
+#else
 		usleep(1000);
+#endif
 		count++;
 	}
 
-	if(count >= 2000)
+	if(count >= timeout)
 	{
-		printf("Sample rate not changed after 2 seconds\n");
+		printf("Sample rate not changed after %.1f seconds\n", (timeout / 1000.0));
 	}
 
 	r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Tuner_BwType, sdrplay_api_Update_Ext1_None);
@@ -1620,7 +1657,11 @@ static void *command_worker(void *arg)
 				left -= received;
 			}
 			if (received == SOCKET_ERROR || do_exit) {
-				printf("comm recv bye\n");
+#ifdef _WIN32
+				printf("comm recv bye (%d), do_exit:%d\n", WSAGetLastError(), do_exit);
+#else
+				printf("comm recv bye, do_exit:%d\n", do_exit);
+#endif
 				sighandler(CTRL_CLOSE_EVENT);
 				pthread_exit(NULL);
 			}
@@ -1801,7 +1842,49 @@ int init_rsp_device(unsigned int sr, unsigned int freq, int enable_bias_t, unsig
 	cbFns.StreamBCbFn = rxb_callback;
 	cbFns.EventCbFn = event_callback;
 
+	fsc = 0;
+	rfc = 0;
+	grc = 0;
+	int count = 0;
+	//int donefs = 0; int donerf = 0; int donegr = 0;
+
 	r = sdrplay_api_Init(chosenDev->dev, &cbFns, NULL);
+
+	while (count < timeout)
+	{
+	/*	if (fsc != 0 && donefs == 0)
+		{
+			printf("Sample rate changed after init in %d ms\n", count);
+			donefs = 1;
+		}
+		if (rfc != 0 && donerf == 0)
+		{
+			printf("Frequency changed after init in %d ms\n", count);
+			donerf = 1;
+		}*/
+		if (grc != 0) // && donegr == 0)
+		{
+			printf("GR changed after init in %d ms\n", count);
+			//donegr = 1;
+			break;
+		}
+	/*	if (fsc != 0 && rfc != 0 && grc != 0)
+		{
+			printf("Everything changed after init in %d ms\n", count);
+			break;
+		} */
+#ifdef _WIN32
+		Sleep(1);
+#else
+		usleep(1000);
+#endif
+		count++;
+	}
+
+	if (count >= timeout)
+	{
+		printf("Something failed to change after init - Fs:%d, Rf:%d, Gr:%d\n", fsc, rfc, grc);
+	}
 
 	if (r != sdrplay_api_Success) {
 		fprintf(stderr, "failed to start the RSP device, return (%d)\n", r);
@@ -1894,7 +1977,7 @@ int main(int argc, char **argv)
 
 #ifdef _WIN32
 	WSADATA wsd;
-	i = WSAStartup(MAKEWORD(2, 2), &wsd);
+	int i = WSAStartup(MAKEWORD(2, 2), &wsd);
 #else
 	struct sigaction sigact, sigign;
 #endif
