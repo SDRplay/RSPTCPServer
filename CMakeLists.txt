@@ -30,7 +30,7 @@ target_link_libraries(rsp_tcp ${LIBSDRPLAY_LIBRARIES} Threads::Threads)
 install(TARGETS rsp_tcp DESTINATION bin)
 
 # building of rsp_stdout new as of 2021.02.21 by Gary kk7dv@arrl.net
-set(SOURCE_FILES rsp_tcp.c)
+set(SOURCE_FILES rsp_stdout.c)
 add_executable(rsp_stdout ${SOURCE_FILES} )
 target_link_libraries(rsp_stdout ${LIBSDRPLAY_LIBRARIES} Threads::Threads)
 install(TARGETS rsp_stdout DESTINATION bin)

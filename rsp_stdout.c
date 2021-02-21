@@ -31,9 +31,7 @@
 #ifndef _WIN32
 #include <unistd.h>
 #include <arpa/inet.h>
-#include <sys/socket.h>
 #include <sys/types.h>
-#include <sys/socket.h>
 #include <sys/time.h>
 #include <netinet/in.h>
 #include <fcntl.h>
@@ -41,7 +39,6 @@
 #define CTRL_BREAK_EVENT    1
 #define CTRL_CLOSE_EVENT    2
 #else
-#include <winsock2.h>
 #include "getopt/getopt.h"
 #endif
 
@@ -50,27 +47,11 @@
 
 #include <sdrplay_api.h>
 
-#ifdef _WIN32
-#pragma comment(lib, "ws2_32.lib")
-
-typedef int socklen_t;
-
-#else
-#define closesocket close
-#define SOCKADDR struct sockaddr
-#define SOCKET int
-#define SOCKET_ERROR -1
-#endif
-
-static SOCKET s;
-
 static int fsc = 0;
 static int rfc = 0;
 static int grc = 0;
 static int timeout = 500;
-static pthread_t tcp_worker_thread;
-static pthread_t command_thread;
-
+static pthread_t stdout_worker_thread;
 static pthread_mutex_t ll_mutex;
 static pthread_cond_t cond;
 
@@ -493,7 +474,7 @@ void event_callback(sdrplay_api_EventT eventId, sdrplay_api_TunerSelectT tunerS,
 	case sdrplay_api_GainChange:
 		if (params->gainParams.gRdB < 200)
 		{
-			printf("gRdB: %u, lnaGRdB: %u, LNAstate: %u, Gain: %0.1f\n", params->gainParams.gRdB, params->gainParams.lnaGRdB, chParams->tunerParams.gain.LNAstate, params->gainParams.currGain);
+			fprintf(stderr, "gRdB: %u, lnaGRdB: %u, LNAstate: %u, Gain: %0.1f\n", params->gainParams.gRdB, params->gainParams.lnaGRdB, chParams->tunerParams.gain.LNAstate, params->gainParams.currGain);
 		}
 		break;
 	case sdrplay_api_PowerOverloadChange:
@@ -501,23 +482,23 @@ void event_callback(sdrplay_api_EventT eventId, sdrplay_api_TunerSelectT tunerS,
 
 		if (params->powerOverloadParams.powerOverloadChangeType == sdrplay_api_Overload_Detected)
 		{
-			printf("adc overload detected\n");
+			fprintf(stderr, "adc overload detected\n");
 			overload = 1;
 		}
 		else if (params->powerOverloadParams.powerOverloadChangeType == sdrplay_api_Overload_Corrected)
 		{
-			printf("adc overload corrected\n");
+			fprintf(stderr, "adc overload corrected\n");
 			overload = 0;
 		}
 		break;
 	case sdrplay_api_DeviceRemoved:
-		printf("RSP removed\n");
+		fprintf(stderr, "RSP removed\n");
 		sdrplay_api_Uninit(chosenDev->dev);
 		sdrplay_api_ReleaseDevice(chosenDev);
 		sdrplay_api_Close();
 		exit(1);
 	case sdrplay_api_RspDuoModeChange:
-		printf("RSPduo mode changed\n");
+		fprintf(stderr, "RSPduo mode changed\n");
 		break;
 	}
 }
@@ -527,17 +508,17 @@ void rxa_callback(short* xi, short* xq, sdrplay_api_StreamCbParamsT *params, uns
 	if(params->fsChanged != 0)
 	{
 		fsc = params->fsChanged;
-		printf("params->fsChanged = %d\n", params->fsChanged);
+		fprintf(stderr, "params->fsChanged = %d\n", params->fsChanged);
 	}
 	if(params->rfChanged != 0)
 	{
 		rfc = params->rfChanged;
-		printf("params->rfChanged = %d\n", params->rfChanged);
+		fprintf(stderr, "params->rfChanged = %d\n", params->rfChanged);
 	}
 	if(params->grChanged != 0)
 	{
 		grc = params->grChanged;
-		printf("params->grChanged = %d\n", params->grChanged);
+		fprintf(stderr, "params->grChanged = %d\n", params->grChanged);
 	}
 
 	if (!do_exit) {
@@ -602,9 +583,9 @@ void rxa_callback(short* xi, short* xq, sdrplay_api_StreamCbParamsT *params, uns
 			cur->next = rpt;
 			//if (verbose) {
 			//	if (num_queued > global_numq)
-			//		printf("ll+, now %d\n", num_queued);
+			//		fprintf(stderr, "ll+, now %d\n", num_queued);
 			//	else if (num_queued < global_numq)
-			//		printf("ll-, now %d\n", num_queued);
+			//		fprintf(stderr, "ll-, now %d\n", num_queued);
 			//}
 			global_numq = num_queued;
 		}
@@ -674,9 +655,9 @@ void rxb_callback(short* xi, short* xq, sdrplay_api_StreamCbParamsT *params, uns
 			cur->next = rpt;
 			if (verbose) {
 				if (num_queued > global_numq)
-					printf("ll+, now %d\n", num_queued);
+					fprintf(stderr, "ll+, now %d\n", num_queued);
 				else if (num_queued < global_numq)
-					printf("ll-, now %d\n", num_queued);
+					fprintf(stderr, "ll-, now %d\n", num_queued);
 			}
 			global_numq = num_queued;
 		}
@@ -685,15 +666,9 @@ void rxb_callback(short* xi, short* xq, sdrplay_api_StreamCbParamsT *params, uns
 	}
 }
 
-static void *tcp_worker(void *arg)
+static void *stdout_worker(void *arg)
 {
 	struct llist *curelem, *prev;
-	int bytesleft, bytessent, index;
-	struct timeval tv = { 1,0 };
-	struct timespec ts;
-	struct timeval tp;
-	fd_set writefds;
-	int r = 0;
 
 	while (1) {
 		if (do_exit) {
@@ -701,46 +676,12 @@ static void *tcp_worker(void *arg)
 		}
 
 		pthread_mutex_lock(&ll_mutex);
-		gettimeofday(&tp, NULL);
-		ts.tv_sec = tp.tv_sec + WORKER_TIMEOUT_SEC;
-		ts.tv_nsec = tp.tv_usec * 1000;
-		r = pthread_cond_timedwait(&cond, &ll_mutex, &ts);
-		if (r == ETIMEDOUT) {
-			pthread_mutex_unlock(&ll_mutex);
-			printf("worker cond timeout\n");
-			sighandler(CTRL_CLOSE_EVENT);
-			pthread_exit(NULL);
-		}
-
 		curelem = ll_buffers;
 		ll_buffers = 0;
 		pthread_mutex_unlock(&ll_mutex);
 
 		while (curelem != 0) {
-			bytesleft = curelem->len;
-			index = 0;
-			bytessent = 0;
-			while (bytesleft > 0) {
-				FD_ZERO(&writefds);
-				FD_SET(s, &writefds);
-				tv.tv_sec = 1;
-				tv.tv_usec = 0;
-				r = select(s + 1, NULL, &writefds, NULL, &tv);
-				if (r) {
-					bytessent = send(s, &curelem->data[index], bytesleft, 0);
-					bytesleft -= bytessent;
-					index += bytessent;
-				}
-				if (bytessent == SOCKET_ERROR || do_exit) {
-#ifdef _WIN32
-					printf("worker socket bye (%d), do_exit:%d\n", WSAGetLastError(), do_exit);
-#else
-					printf("worker socket bye, do_exit:%d\n", do_exit);
-#endif
-					sighandler(CTRL_CLOSE_EVENT);
-					pthread_exit(NULL);
-				}
-			}
+            fwrite(&curelem->data[0], 1, curelem->len, stdout);
 			prev = curelem;
 			curelem = curelem->next;
 			free(prev->data);
@@ -912,11 +853,11 @@ static int apply_agc_settings()
 	chParams->ctrlParams.agc.decay_delay_ms = 200;
 	chParams->ctrlParams.agc.decay_threshold_dB = 5;
 
-	printf("apply agc settings - enable:%d\n", agc);
+	fprintf(stderr, "apply agc settings - enable:%d\n", agc);
 
 	r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Ctrl_Agc, sdrplay_api_Update_Ext1_None);
 	if (r != sdrplay_api_Success) {
-		printf("agc control error (%d)\n", r);
+		fprintf(stderr, "agc control error (%d)\n", r);
 	}
 
 	return r;
@@ -937,7 +878,7 @@ static int apply_gain_settings()
 	{
 		if(grc != 0)
 		{
-			printf("GR updated in %d ms\n", count);
+			fprintf(stderr, "GR updated in %d ms\n", count);
 			r = 0;
 			break;
 		}
@@ -951,7 +892,7 @@ static int apply_gain_settings()
 
 	if(count >= timeout)
 	{
-		printf("GR failed to update in %.1f seconds\n", (timeout / 1000.0));
+		fprintf(stderr, "GR failed to update in %.1f seconds\n", (timeout / 1000.0));
 		r = 1;
 	}
 
@@ -1008,7 +949,7 @@ static int set_bias_t(unsigned int enable)
 
 		r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Rsp2_BiasTControl, sdrplay_api_Update_Ext1_None);
 		if (r != sdrplay_api_Success) {
-			printf("bias-t control error (%d)\n", r);
+			fprintf(stderr, "bias-t control error (%d)\n", r);
 		}
 		break;
 
@@ -1017,7 +958,7 @@ static int set_bias_t(unsigned int enable)
 
 		r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Rsp1a_BiasTControl, sdrplay_api_Update_Ext1_None);
 		if (r != sdrplay_api_Success) {
-			printf("bias-t control error (%d)\n", r);
+			fprintf(stderr, "bias-t control error (%d)\n", r);
 		}
 		break;
 
@@ -1026,7 +967,7 @@ static int set_bias_t(unsigned int enable)
 
 		r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_RspDuo_BiasTControl, sdrplay_api_Update_Ext1_None);
 		if (r != sdrplay_api_Success) {
-			printf("bias-t control error (%d)\n", r);
+			fprintf(stderr, "bias-t control error (%d)\n", r);
 		}
 		break;
 
@@ -1035,13 +976,13 @@ static int set_bias_t(unsigned int enable)
 
 		r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_None, sdrplay_api_Update_RspDx_BiasTControl);
 		if (r != sdrplay_api_Success) {
-			printf("bias-t control error (%d)\n", r);
+			fprintf(stderr, "bias-t control error (%d)\n", r);
 		}
 		break;
 
 	default:
 		if (verbose) {
-			printf("bias-t not supported\n");
+			fprintf(stderr, "bias-t not supported\n");
 		}
 		break;
 	}
@@ -1059,7 +1000,7 @@ static int set_refclock_output(unsigned int enable)
 
 		r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Rsp2_ExtRefControl, sdrplay_api_Update_Ext1_None);
 		if (r != sdrplay_api_Success) {
-			printf("external reference control error (%d)\n", r);
+			fprintf(stderr, "external reference control error (%d)\n", r);
 		}
 		break;
 
@@ -1068,13 +1009,13 @@ static int set_refclock_output(unsigned int enable)
 
 		r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_RspDuo_ExtRefControl, sdrplay_api_Update_Ext1_None);
 		if (r != sdrplay_api_Success) {
-			printf("external reference control error (%d)\n", r);
+			fprintf(stderr, "external reference control error (%d)\n", r);
 		}
 		break;
 
 	default:
 		if (verbose) {
-			printf("reference clock output not supported\n");
+			fprintf(stderr, "reference clock output not supported\n");
 		}
 		break;
 	}
@@ -1106,7 +1047,7 @@ static int set_antenna_input(unsigned int antenna)
 				{
 					r = sdrplay_api_SwapRspDuoActiveTuner(chosenDev->dev, &chosenDev->tuner, sdrplay_api_RspDuo_AMPORT_2);
 					if (r != sdrplay_api_Success) {
-						printf("set tuner error (%d)\n", r);
+						fprintf(stderr, "set tuner error (%d)\n", r);
 					}
 					chParams = deviceParams->rxChannelA;
 				}
@@ -1139,7 +1080,7 @@ static int set_antenna_input(unsigned int antenna)
 				{
 					r = sdrplay_api_SwapRspDuoActiveTuner(chosenDev->dev, &chosenDev->tuner, sdrplay_api_RspDuo_AMPORT_2);
 					if (r != sdrplay_api_Success) {
-						printf("set tuner error (%d)\n", r);
+						fprintf(stderr, "set tuner error (%d)\n", r);
 					}
 					chParams = deviceParams->rxChannelB;
 				}
@@ -1162,7 +1103,7 @@ static int set_antenna_input(unsigned int antenna)
 					{
 						r = sdrplay_api_SwapRspDuoActiveTuner(chosenDev->dev, &chosenDev->tuner, sdrplay_api_RspDuo_AMPORT_1);
 						if (r != sdrplay_api_Success) {
-							printf("set tuner error (%d)\n", r);
+							fprintf(stderr, "set tuner error (%d)\n", r);
 						}
 						chParams = deviceParams->rxChannelA;
 					}
@@ -1208,13 +1149,13 @@ static int set_antenna_input(unsigned int antenna)
 
 		r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, reason1, reason2);
 		if (r != sdrplay_api_Success) {
-			printf("set tuner error (%d)\n", r);
+			fprintf(stderr, "set tuner error (%d)\n", r);
 		}
 	}
 	else
 	{
 		if (verbose) {
-			printf("antenna input not supported\n");
+			fprintf(stderr, "antenna input not supported\n");
 		}
 	}
 
@@ -1236,7 +1177,7 @@ static int set_notch_filters(unsigned int notch)
 		chParams->rsp2TunerParams.rfNotchEnable = rf_notch;
 		r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Rsp2_RfNotchControl, sdrplay_api_Update_Ext1_None);
 		if (r != sdrplay_api_Success) {
-			printf("set rf notch error (%d)\n", r);
+			fprintf(stderr, "set rf notch error (%d)\n", r);
 		}
 		break;
 
@@ -1244,12 +1185,12 @@ static int set_notch_filters(unsigned int notch)
 		deviceParams->devParams->rsp1aParams.rfDabNotchEnable = dab_notch;
 		r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Rsp1a_RfDabNotchControl, sdrplay_api_Update_Ext1_None);
 		if (r != sdrplay_api_Success) {
-			printf("set dab notch error (%d)\n", r);
+			fprintf(stderr, "set dab notch error (%d)\n", r);
 		}
 		deviceParams->devParams->rsp1aParams.rfNotchEnable = bc_notch;
 		r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Rsp1a_RfNotchControl, sdrplay_api_Update_Ext1_None);
 		if (r != sdrplay_api_Success) {
-			printf("set broadcast notch error (%d)\n", r);
+			fprintf(stderr, "set broadcast notch error (%d)\n", r);
 		}
 		break;
 
@@ -1257,17 +1198,17 @@ static int set_notch_filters(unsigned int notch)
 		chParams->rspDuoTunerParams.rfDabNotchEnable = dab_notch;
 		r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_RspDuo_RfDabNotchControl, sdrplay_api_Update_Ext1_None);
 		if (r != sdrplay_api_Success) {
-			printf("set dab notch error (%d)\n", r);
+			fprintf(stderr, "set dab notch error (%d)\n", r);
 		}
 		chParams->rspDuoTunerParams.rfNotchEnable = bc_notch;
 		r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_RspDuo_RfNotchControl, sdrplay_api_Update_Ext1_None);
 		if (r != sdrplay_api_Success) {
-			printf("set broadcast notch error (%d)\n", r);
+			fprintf(stderr, "set broadcast notch error (%d)\n", r);
 		}
 		chParams->rspDuoTunerParams.tuner1AmNotchEnable = am_notch;
 		r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_RspDuo_Tuner1AmNotchControl, sdrplay_api_Update_Ext1_None);
 		if (r != sdrplay_api_Success) {
-			printf("set am notch error (%d)\n", r);
+			fprintf(stderr, "set am notch error (%d)\n", r);
 		}
 		break;
 
@@ -1275,18 +1216,18 @@ static int set_notch_filters(unsigned int notch)
 		deviceParams->devParams->rspDxParams.rfDabNotchEnable = dab_notch;
 		r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_None, sdrplay_api_Update_RspDx_RfDabNotchControl);
 		if (r != sdrplay_api_Success) {
-			printf("set dab notch error (%d)\n", r);
+			fprintf(stderr, "set dab notch error (%d)\n", r);
 		}
 		deviceParams->devParams->rspDxParams.rfNotchEnable = bc_notch;
 		r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_None, sdrplay_api_Update_RspDx_RfNotchControl);
 		if (r != sdrplay_api_Success) {
-			printf("set broadcast notch error (%d)\n", r);
+			fprintf(stderr, "set broadcast notch error (%d)\n", r);
 		}
 		break;
 
 	default:
 		if (verbose) {
-			printf("notch filter not supported\n");
+			fprintf(stderr, "notch filter not supported\n");
 		}
 		break;
 	}
@@ -1300,12 +1241,12 @@ static int set_gain_by_index(unsigned int index)
 	uint8_t if_gr, lnastate;
 
 	if (index > GAIN_STEPS - 1) {
-		printf("gain step %d out of range", index);
+		fprintf(stderr, "gain step %d out of range", index);
 		return 0;
 	}
 
 	if (gain_index_to_gain(index, &if_gr, &lnastate) != 0) {
-		printf("unable to get gain for current band\n");
+		fprintf(stderr, "unable to get gain for current band\n");
 		return 0;
 	}
 
@@ -1324,7 +1265,7 @@ static int set_gain_by_index(unsigned int index)
 	{
 		if(grc != 0)
 		{
-			printf("GR updated in %d ms\n", count);
+			fprintf(stderr, "GR updated in %d ms\n", count);
 			r = 0;
 			break;
 		}
@@ -1338,7 +1279,7 @@ static int set_gain_by_index(unsigned int index)
 
 	if(count >= timeout)
 	{
-		printf("GR failed to update in %.1f seconds\n", (timeout / 1000.0));
+		fprintf(stderr, "GR failed to update in %.1f seconds\n", (timeout / 1000.0));
 		r = 1;
 	}
 
@@ -1384,7 +1325,7 @@ static int set_tuner_gain_mode(unsigned int mode)
 		{
 			if(grc != 0)
 			{
-				printf("GR updated in %d ms\n", count);
+				fprintf(stderr, "GR updated in %d ms\n", count);
 				r = 0;
 				break;
 			}
@@ -1398,12 +1339,12 @@ static int set_tuner_gain_mode(unsigned int mode)
 
 		if(count >= timeout)
 		{
-			printf("GR failed to update in %.1f seconds\n", (timeout / 1000.0));
+			fprintf(stderr, "GR failed to update in %.1f seconds\n", (timeout / 1000.0));
 			r = 1;
 		}
 
 		set_gain_by_index(last_gain_idx);
-		printf("agc disabled\n");
+		fprintf(stderr, "agc disabled\n");
 	}
 	else {
 		chParams->ctrlParams.agc.enable = sdrplay_api_AGC_100HZ;
@@ -1417,7 +1358,7 @@ static int set_tuner_gain_mode(unsigned int mode)
 		{
 			if(grc != 0)
 			{
-				printf("GR updated in %d ms\n", count);
+				fprintf(stderr, "GR updated in %d ms\n", count);
 				r = 0;
 				break;
 			}
@@ -1431,11 +1372,11 @@ static int set_tuner_gain_mode(unsigned int mode)
 
 		if(count >= timeout)
 		{
-			printf("GR failed to update in %.1f seconds\n", (timeout / 1000.0));
+			fprintf(stderr, "GR failed to update in %.1f seconds\n", (timeout / 1000.0));
 			r = 1;
 		}
 
-		printf("agc enabled\n");
+		fprintf(stderr, "agc enabled\n");
 	}
 
 	return r;
@@ -1448,7 +1389,7 @@ static int set_freq_correction(int32_t corr)
 	deviceParams->devParams->ppm = (double)corr;
 	r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Dev_Ppm, sdrplay_api_Update_Ext1_None);
 	if (r != sdrplay_api_Success) {
-		printf("set freq correction error (%d)\n", r);
+		fprintf(stderr, "set freq correction error (%d)\n", r);
 	}
 
 	return r;
@@ -1476,7 +1417,7 @@ static int set_freq(uint32_t f)
 		if(rfc != 0)
 		{
 			r = 0;
-			printf("Frequency updated in %d ms\n", count);
+			fprintf(stderr, "Frequency updated in %d ms\n", count);
 			break;
 		}
 #ifdef _WIN32
@@ -1490,7 +1431,7 @@ static int set_freq(uint32_t f)
 	if(count >= timeout)
 	{
 		r = 1;
-		printf("Frequency failed to update in %.1f seconds\n", (timeout / 1000.0));
+		fprintf(stderr, "Frequency failed to update in %.1f seconds\n", (timeout / 1000.0));
 	}
 
 	apply_agc_settings();
@@ -1510,7 +1451,7 @@ static int set_sample_rate(uint32_t sr)
 	int decimation;
 
 	if (sr < (2000000 / MAX_DECIMATION_FACTOR) || sr > 10000000) {
-		printf("sample rate %u is not supported\n", sr);
+		fprintf(stderr, "sample rate %u is not supported\n", sr);
 		return -1;
 	}
 
@@ -1586,7 +1527,7 @@ static int set_sample_rate(uint32_t sr)
 	chParams->tunerParams.bwType = bwType;
 	deviceParams->devParams->fsFreq.fsHz = f;
 
-	printf("device SR %.2f, decim %d, output SR %u, IF Filter BW %d kHz\n", f, decimation, sr, bwType);
+	fprintf(stderr, "device SR %.2f, decim %d, output SR %u, IF Filter BW %d kHz\n", f, decimation, sr, bwType);
 
 	fsc = 0;
 	int count = 0;
@@ -1597,7 +1538,7 @@ static int set_sample_rate(uint32_t sr)
 	{
 		if(fsc != 0)
 		{
-			printf("Sample rate changed after %d ms\n", count);
+			fprintf(stderr, "Sample rate changed after %d ms\n", count);
 			break;
 		}
 #ifdef _WIN32
@@ -1610,177 +1551,18 @@ static int set_sample_rate(uint32_t sr)
 
 	if(count >= timeout)
 	{
-		printf("Sample rate not changed after %.1f seconds\n", (timeout / 1000.0));
+		fprintf(stderr, "Sample rate not changed after %.1f seconds\n", (timeout / 1000.0));
 	}
 
 	r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Tuner_BwType, sdrplay_api_Update_Ext1_None);
 
 	if (r != sdrplay_api_Success) {
-		printf("set bw error (%d)\n", r);
+		fprintf(stderr, "set bw error (%d)\n", r);
 	}
 
 	apply_agc_settings();
 
 	return r;
-}
-
-#ifdef _WIN32
-#define __attribute__(x)
-#pragma pack(push, 1)
-#endif
-struct command {
-	unsigned char cmd;
-	unsigned int param;
-}__attribute__((packed));
-#ifdef _WIN32
-#pragma pack(pop)
-#endif
-
-static void *command_worker(void *arg)
-{
-	int left, received = 0;
-	fd_set readfds;
-	struct command cmd = { 0, 0 };
-	struct timeval tv = { 1, 0 };
-	int r = 0;
-	uint32_t tmp;
-
-	while (1) {
-		left = sizeof(cmd);
-		while (left > 0) {
-			FD_ZERO(&readfds);
-			FD_SET(s, &readfds);
-			tv.tv_sec = 1;
-			tv.tv_usec = 0;
-			r = select(s + 1, &readfds, NULL, NULL, &tv);
-			if (r) {
-				received = recv(s, (char*)&cmd + (sizeof(cmd) - left), left, 0);
-				left -= received;
-			}
-			if (received == SOCKET_ERROR || do_exit) {
-#ifdef _WIN32
-				printf("comm recv bye (%d), do_exit:%d\n", WSAGetLastError(), do_exit);
-#else
-				printf("comm recv bye, do_exit:%d\n", do_exit);
-#endif
-				sighandler(CTRL_CLOSE_EVENT);
-				pthread_exit(NULL);
-			}
-		}
-		switch (cmd.cmd) {
-		case 0x01:
-			printf("set freq %d\n", ntohl(cmd.param));
-			set_freq(ntohl(cmd.param));
-			break;
-		case 0x02:
-			printf("set sample rate %d\n", ntohl(cmd.param));
-			set_sample_rate(ntohl(cmd.param));
-			break;
-		case 0x03:
-			printf("set gain mode %d\n", ntohl(cmd.param));
-			set_tuner_gain_mode(ntohl(cmd.param));
-			break;
-		case 0x04:
-			printf("set gain %d\n", ntohl(cmd.param));
-			set_gain(ntohl(cmd.param));
-			break;
-		case 0x05:
-			printf("set freq correction %d\n", ntohl(cmd.param));
-			set_freq_correction(ntohl(cmd.param));
-			break;
-		case 0x06:
-			tmp = ntohl(cmd.param);
-			printf("set if stage %d gain %d\n", tmp >> 16, (short)(tmp & 0xffff));
-			break;
-		case 0x07:
-			printf("set test mode %d\n", ntohl(cmd.param));
-			break;
-		case 0x08:
-			printf("set agc mode %d\n", ntohl(cmd.param));
-			break;
-		case 0x09:
-			printf("set direct sampling %d\n", ntohl(cmd.param));
-			break;
-		case 0x0a:
-			printf("set offset tuning %d\n", ntohl(cmd.param));
-			break;
-		case 0x0b:
-			printf("set rtl xtal %d\n", ntohl(cmd.param));
-			break;
-		case 0x0c:
-			printf("set tuner xtal %d\n", ntohl(cmd.param));
-			break;
-		case 0x0d:
-			printf("set tuner gain by index %d\n", ntohl(cmd.param));
-			set_gain_by_index(ntohl(cmd.param));
-			break;
-		case 0x0e:
-			printf("set bias tee %d\n", ntohl(cmd.param));
-			set_bias_t((int)ntohl(cmd.param));
-			break;
-
-			// Extended mode commands
-		case RSP_TCP_COMMAND_SET_ANTENNA:
-			if (extended_mode) {
-				printf("set antenna input %d\n", ntohl(cmd.param));
-				set_antenna_input((unsigned int)ntohl(cmd.param));
-			}
-			break;
-
-		case RSP_TCP_COMMAND_SET_NOTCH:
-			if (extended_mode) {
-				printf("set notch filter 0x%x\n", ntohl(cmd.param));
-				set_notch_filters((unsigned int)ntohl(cmd.param));
-			}
-			break;
-
-		case RSP_TCP_COMMAND_SET_LNASTATE:
-			if (extended_mode) {
-				printf("set LNAState %d\n", ntohl(cmd.param));
-				set_lna((unsigned int)ntohl(cmd.param));
-			}
-			break;
-
-		case RSP_TCP_COMMAND_SET_IF_GAIN_R:
-			if (extended_mode) {
-				printf("set if gain reduction %d\n", ntohl(cmd.param));
-				set_if_gain_reduction((int)ntohl(cmd.param));
-			}
-			break;
-
-		case RSP_TCP_COMMAND_SET_AGC:
-			if (extended_mode) {
-				printf("set agc %d\n", ntohl(cmd.param));
-				set_agc((unsigned int)ntohl(cmd.param));
-			}
-			break;
-
-		case RSP_TCP_COMMAND_SET_AGC_SETPOINT:
-			if (extended_mode) {
-				printf("set agc set point %d\n", ntohl(cmd.param));
-				set_agc_setpoint((int)ntohl(cmd.param));
-			}
-			break;
-
-		case RSP_TCP_COMMAND_SET_BIAST:
-			if (extended_mode) {
-				printf("set bias-t %d\n", ntohl(cmd.param));
-				set_bias_t((unsigned int)ntohl(cmd.param));
-			}
-			break;
-
-		case RSP_TCP_COMMAND_SET_REFOUT:
-			if (extended_mode) {
-				printf("set reference out %d\n", ntohl(cmd.param));
-				set_refclock_output((unsigned int)ntohl(cmd.param));
-			}
-			break;
-
-		default:
-			break;
-		}
-		cmd.cmd = 0xff;
-	}
 }
 
 int init_rsp_device(unsigned int sr, unsigned int freq, int enable_bias_t, unsigned int notch, int enable_refout, int antenna)
@@ -1855,23 +1637,23 @@ int init_rsp_device(unsigned int sr, unsigned int freq, int enable_bias_t, unsig
 	{
 	/*	if (fsc != 0 && donefs == 0)
 		{
-			printf("Sample rate changed after init in %d ms\n", count);
+			fprintf(stderr, "Sample rate changed after init in %d ms\n", count);
 			donefs = 1;
 		}
 		if (rfc != 0 && donerf == 0)
 		{
-			printf("Frequency changed after init in %d ms\n", count);
+			fprintf(stderr, "Frequency changed after init in %d ms\n", count);
 			donerf = 1;
 		}*/
 		if (grc != 0) // && donegr == 0)
 		{
-			printf("GR changed after init in %d ms\n", count);
+			fprintf(stderr, "GR changed after init in %d ms\n", count);
 			//donegr = 1;
 			break;
 		}
 	/*	if (fsc != 0 && rfc != 0 && grc != 0)
 		{
-			printf("Everything changed after init in %d ms\n", count);
+			fprintf(stderr, "Everything changed after init in %d ms\n", count);
 			break;
 		} */
 #ifdef _WIN32
@@ -1884,7 +1666,7 @@ int init_rsp_device(unsigned int sr, unsigned int freq, int enable_bias_t, unsig
 
 	if (count >= timeout)
 	{
-		printf("Something failed to change after init - Fs:%d, Rf:%d, Gr:%d\n", fsc, rfc, grc);
+		fprintf(stderr, "Something failed to change after init - Fs:%d, Rf:%d, Gr:%d\n", fsc, rfc, grc);
 	}
 
 	if (r != sdrplay_api_Success) {
@@ -1900,11 +1682,11 @@ int init_rsp_device(unsigned int sr, unsigned int freq, int enable_bias_t, unsig
 		r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Ctrl_Decimation, sdrplay_api_Update_Ext1_None);
 
 		if (r != sdrplay_api_Success) {
-			printf("set decimation error, return (%d)\n", r);
+			fprintf(stderr, "set decimation error, return (%d)\n", r);
 		}
 	}
 
-	printf("started rx\n");
+	fprintf(stderr, "started rx\n");
 	
 	// set bias-T
 	set_bias_t(enable_bias_t);
@@ -1925,13 +1707,12 @@ int init_rsp_device(unsigned int sr, unsigned int freq, int enable_bias_t, unsig
 
 void usage(void)
 {
-	printf("rsp_tcp, an I/Q spectrum server for SDRPlay receivers "
+	fprintf(stderr, "rsp_stdout, an I/Q spectrum server for SDRPlay receivers "
 #ifdef SERVER_VERSION
 		"VERSION "SERVER_VERSION
 #endif
 		"\n\n"
-		"Usage:\t[-a listen address]\n"
-		"\t[-p listen port (default: 1234)]\n"
+		"Usage:\n"
 		"\t[-d RSP device to use (default: 1, first found)]\n"
 		"\t[-P Antenna Port select* (0/1/2, default: 0, Port A)]\n"
 		"\t[-T Bias-T enable* (default: disabled)]\n"
@@ -1940,7 +1721,7 @@ void usage(void)
 		"\t[-s samplerate in Hz (default: 2048000 Hz)]\n"
 		"\t[-n max number of linked list buffers to keep (default: 500)]\n"
 		"\t[-v Verbose output (debug) enable (default: disabled)]\n"
-		"\t[-E RSP extended mode enable (default: rtl_tcp compatible mode)\n"
+		"\t[-E RSP extended mode enable (default: rtl_stdout compatible mode)\n"
 		"\t[-A AM notch enable (default: disabled)\n"
 		"\t[-B Broadcast notch enable (default: disabled)\n"
 		"\t[-D DAB notch enable (default: disabled)\n"
@@ -1952,18 +1733,10 @@ void usage(void)
 int main(int argc, char **argv)
 {
 	int r, opt;
-	char* addr = "127.0.0.1";
-	int port = 1234;
 	uint32_t frequency = DEFAULT_FREQUENCY, samp_rate = DEFAULT_SAMPLERATE;
-	struct sockaddr_in local, remote;
 	struct llist *curelem, *prev;
 	pthread_attr_t attr;
 	void *status;
-	struct timeval tv = { 1,0 };
-	struct linger ling = { 1,0 };
-	SOCKET listensocket;
-	socklen_t rlen;
-	fd_set readfds;
 	dongle_info_t dongle_info;
 
 	float ver;
@@ -1983,7 +1756,7 @@ int main(int argc, char **argv)
 	struct sigaction sigact, sigign;
 #endif
 
-	printf("rsp_tcp version %d.%d\n\n", RSP_TCP_VERSION_MAJOR, RSP_TCP_VERSION_MINOR);
+	fprintf(stderr, "rsp_stdout version %d.%d\n\n", RSP_TCP_VERSION_MAJOR, RSP_TCP_VERSION_MINOR);
 
 	while ((opt = getopt(argc, argv, "a:p:f:b:s:n:d:P:TvADBFRE")) != -1) {
 		switch (opt) {
@@ -2001,12 +1774,6 @@ int main(int argc, char **argv)
 			break;
 		case 's':
 			samp_rate = (uint32_t)atofs(optarg);
-			break;
-		case 'a':
-			addr = optarg;
-			break;
-		case 'p':
-			port = atoi(optarg);
 			break;
 		case 'n':
 			llbuf_num = atoi(optarg);
@@ -2074,7 +1841,7 @@ int main(int argc, char **argv)
 		fprintf(stderr, "API library must be version %.2f\n", ver);
 		exit(1);
 	}
-	printf("API library version %.2f found\n", ver);
+	fprintf(stderr, "API library version %.2f found\n", ver);
 
 	// enable debug output
 	if (verbose) {
@@ -2116,13 +1883,13 @@ int main(int argc, char **argv)
 	hardware_caps = model_to_capabilities(hardware_model);
 
 	if (hardware_model == RSP_MODEL_UNKNOWN || hardware_caps == NULL) {
-		printf("unknown RSP model (hw ver %d)\n", hardware_version);
+		fprintf(stderr, "unknown RSP model (hw ver %d)\n", hardware_version);
 
 		// force compatibility mode when model is unknown
 		extended_mode = 0;
 	}
 	else {
-		printf("detected RSP model '%s' (hw ver %d)\n", model_to_string(hardware_model), hardware_version);
+		fprintf(stderr, "detected RSP model '%s' (hw ver %d)\n", model_to_string(hardware_model), hardware_version);
 	}
 
 	r = sdrplay_api_GetDeviceParams(chosenDev->dev, &deviceParams);
@@ -2162,56 +1929,8 @@ int main(int argc, char **argv)
 	pthread_mutex_init(&ll_mutex, NULL);
 	pthread_cond_init(&cond, NULL);
 
-	memset(&local, 0, sizeof(local));
-	local.sin_family = AF_INET;
-	local.sin_port = htons(port);
-	local.sin_addr.s_addr = inet_addr(addr);
-
-	listensocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	r = 1;
-	setsockopt(listensocket, SOL_SOCKET, SO_REUSEADDR, (char *)&r, sizeof(int));
-	setsockopt(listensocket, SOL_SOCKET, SO_LINGER, (char *)&ling, sizeof(ling));
-	bind(listensocket, (struct sockaddr *)&local, sizeof(local));
-
-#ifdef _WIN32
-	opt = 1;
-	ioctlsocket(listensocket, FIONBIO, &opt);
-#else
-	r = fcntl(listensocket, F_GETFL, 0);
-	r = fcntl(listensocket, F_SETFL, r | O_NONBLOCK);
-#endif
-
 	while (1) {
-		printf("listening...\n");
-
-		if (!extended_mode) {
-			printf("Use the device argument 'rtl_tcp=%s:%d' in OsmoSDR "
-				"(gr-osmosdr) source\n"
-				"to receive samples in GRC and control "
-				"rtl_tcp parameters (frequency, gain, ...).\n",
-				addr, port);
-		}
-		listen(listensocket, 1);
-
-		while (1) {
-			FD_ZERO(&readfds);
-			FD_SET(listensocket, &readfds);
-			tv.tv_sec = 1;
-			tv.tv_usec = 0;
-			r = select(listensocket + 1, &readfds, NULL, NULL, &tv);
-			if (do_exit) {
-				goto out;
-			}
-			else if (r) {
-				rlen = sizeof(remote);
-				s = accept(listensocket, (struct sockaddr *)&remote, &rlen);
-				break;
-			}
-		}
-
-		setsockopt(s, SOL_SOCKET, SO_LINGER, (char *)&ling, sizeof(ling));
-
-		printf("client accepted!\n");
+		fprintf(stderr, "outputting to stdout...\n");
 
 		memset(&dongle_info, 0, sizeof(dongle_info));
 		memcpy(&dongle_info.magic, "RTL0", 4);
@@ -2219,16 +1938,13 @@ int main(int argc, char **argv)
 		dongle_info.tuner_type = htonl(RTLSDR_TUNER_R820T);
 		dongle_info.tuner_gain_count = htonl(GAIN_STEPS-1);
 
-		r = send(s, (const char *)&dongle_info, sizeof(dongle_info), 0);
-		if (sizeof(dongle_info) != r) {
-			printf("failed to send dongle information\n");
-		}
+    	fwrite((const char *)&dongle_info, 1, sizeof(dongle_info), stdout);
 
 		if (extended_mode)
 		{
 			rsp_extended_capabilities_t rsp_cap;
 
-			printf("sending RSP extended capabilities structure\n");
+			fprintf(stderr, "sending RSP extended capabilities structure\n");
 
 			memset(&rsp_cap, 0, sizeof(rsp_extended_capabilities_t));
 			memcpy(&rsp_cap.magic, RSP_CAPABILITIES_MAGIC, 4);
@@ -2245,46 +1961,35 @@ int main(int argc, char **argv)
 			rsp_cap.ifgr_min = hardware_caps->min_ifgr;
 			rsp_cap.ifgr_max = hardware_caps->max_ifgr;
 
-			r = send(s, (const char *)&rsp_cap, sizeof(rsp_cap), 0);
-			if (sizeof(rsp_cap) != r) {
-				printf("failed to send RSP capabilities information\n");
-			}
+            fwrite((const char *)&rsp_cap, 1, sizeof(rsp_cap), stdout);
 		}
 
-		// must start the tcp_worker before the first samples are available from the rx
+		// must start the stdout_worker before the first samples are available from the rx
 		// because the rx_callback tries to send a condition to the worker thread
 		pthread_attr_init(&attr);
 		pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-		r = pthread_create(&tcp_worker_thread, &attr, tcp_worker, NULL);
+		r = pthread_create(&stdout_worker_thread, &attr, stdout_worker, NULL);
 		if (r != 0) {
-			printf("failed to create tcp worker thread\n");
+			fprintf(stderr, "failed to create stdout worker thread\n");
 			break;
 		}
 
 		// initialise API and start the rx		
 		r = init_rsp_device(samp_rate, frequency, enable_biastee, notch, enable_refout, antenna);
 		if (r != 0) {
-			printf("failed to initialise RSP device\n");
+			fprintf(stderr, "failed to initialise RSP device\n");
 			break;
 		}
+    	fprintf(stderr,"started rx\n");
 
-		// the rx must be started before accepting commands from the command worker
-		r = pthread_create(&command_thread, &attr, command_worker, NULL);
-		if (r != 0) {
-			printf("failed to create command thread\n");
-			break;
-		}
 		pthread_attr_destroy(&attr);
 
-		// wait for the workers to exit
-		pthread_join(tcp_worker_thread, &status);
-		pthread_join(command_thread, &status);
-
-		closesocket(s);
+		// wait for the worker to exit
+		pthread_join(stdout_worker_thread, &status);
 
 		// stop the receiver
 		sdrplay_api_Uninit(chosenDev->dev);
-		printf("all threads dead..\n");
+		fprintf(stderr, "thread finished..\n");
 
 		curelem = ll_buffers;
 		ll_buffers = 0;
@@ -2300,15 +2005,9 @@ int main(int argc, char **argv)
 		global_numq = 0;
 	}
 
-out:
 	sdrplay_api_ReleaseDevice(chosenDev);
 	sdrplay_api_Close();
 
-	closesocket(listensocket);
-	closesocket(s);
-#ifdef _WIN32
-	WSACleanup();
-#endif
-	printf("bye!\n");
+	fprintf(stderr, "bye!\n");
 	return r >= 0 ? r : -r;
 }
