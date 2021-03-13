@@ -419,6 +419,8 @@ static int agc_set_point = DEFAULT_AGC_SETPOINT;
 static int gain_reduction = DEFAULT_GAIN_REDUCTION;
 static int gainReductionParameterPresent = 0;
 static int gainReductionParameter = 0;
+static int rspLNAParameterPresent = 0;
+static int rspLNAParameter = 0;
 static int sample_shift = 2;
 
 // *************************************
@@ -1074,7 +1076,11 @@ static int set_antenna_input(unsigned int antenna)
 			} else {
 				gain_reduction = if_gr;
 			}
-			lna_state = lnastate;
+			if (rspLNAParameterPresent) {
+				lna_state = rspLNAParameter;
+			} else {
+				lna_state = lnastate;
+			}
 		}
 
 		r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, reason1, reason2);
@@ -1181,7 +1187,11 @@ int init_rsp_device(unsigned int sr, unsigned int freq, int enable_bias_t, unsig
 		} else {
 			gain_reduction = ifgain;
 		}
-		lna_state = lnastate;
+		if (rspLNAParameterPresent) {
+			lna_state = rspLNAParameter;
+		} else {
+			lna_state = lnastate;
+		}
 	}
 	
 	if (sr < 300e3) { bwType = sdrplay_api_BW_0_200; }
@@ -1320,6 +1330,7 @@ void usage(void)
 		"\t[-d RSP device to use (default: 1, first found)]\n"
 		"\t[-P Antenna Port select* (0/1/2, default: 0, Port A)]\n"
         "\t[-r Gain reduction (default: 44  / values 20-59)]\n"
+		"\t[-l LNA state/level, about -6dB each step (default: 0 / values 0-0)]\n"
 		"\t[-T Bias-T enable* (default: disabled)]\n"
 		"\t[-R Refclk output enable* (default: disabled)]\n"
 		"\t[-f frequency to tune to [Hz]]\n"
@@ -1377,6 +1388,10 @@ int main(int argc, char **argv)
 		case 'r':
 			gainReductionParameter = atoi(optarg);
 			gainReductionParameterPresent = 1;
+			break;
+		case 'l':
+			rspLNAParameter = atoi(optarg);
+			rspLNAParameterPresent = 1;
 			break;
 		case 'f':
 			frequency = (uint32_t)atofs(optarg);
