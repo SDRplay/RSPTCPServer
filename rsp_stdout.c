@@ -1347,7 +1347,7 @@ void usage(void)
 		"\t[-D DAB notch enable (default: disabled)\n"
 		"\t[-F RF notch enable (default: disabled)\n"
 		"\t[-b Sample bit-depth (8/16 default: 8)\n"
-        "\t[-r Gain reduction (default: 44  / values 20-59)]\n"
+        "\t[-r Gain reduction (default: 40  / values 20-59)]\n"
 		"\t[-l LNA state/level, about -6dB each step (default: 0 / values 0-0)]\n"
 		"\t[-g Auto Gain Control setpoint (default: -30)]\n"
 		);
