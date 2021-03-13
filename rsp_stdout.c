@@ -421,6 +421,8 @@ static int gainReductionParameterPresent = 0;
 static int gainReductionParameter = 0;
 static int rspLNAParameterPresent = 0;
 static int rspLNAParameter = 0;
+static int AGCSetpointParameterPresent = 0;
+static int AGCSetpointParameter = 0;
 static int sample_shift = 2;
 
 // *************************************
@@ -851,7 +853,11 @@ static int apply_agc_settings()
 	sdrplay_api_AgcControlT agc = agc_state ? sdrplay_api_AGC_CTRL_EN : sdrplay_api_AGC_DISABLE;
 
 	chParams->ctrlParams.agc.enable = agc;
-	chParams->ctrlParams.agc.setPoint_dBfs = agc_set_point;
+	if (AGCSetpointParameterPresent) {
+		chParams->ctrlParams.agc.setPoint_dBfs = AGCSetpointParameter;
+	} else {
+		chParams->ctrlParams.agc.setPoint_dBfs = agc_set_point;
+	}
 	chParams->ctrlParams.agc.attack_ms = 500;
 	chParams->ctrlParams.agc.decay_ms = 500;
 	chParams->ctrlParams.agc.decay_delay_ms = 200;
@@ -1329,8 +1335,6 @@ void usage(void)
 		"Usage:\n"
 		"\t[-d RSP device to use (default: 1, first found)]\n"
 		"\t[-P Antenna Port select* (0/1/2, default: 0, Port A)]\n"
-        "\t[-r Gain reduction (default: 44  / values 20-59)]\n"
-		"\t[-l LNA state/level, about -6dB each step (default: 0 / values 0-0)]\n"
 		"\t[-T Bias-T enable* (default: disabled)]\n"
 		"\t[-R Refclk output enable* (default: disabled)]\n"
 		"\t[-f frequency to tune to [Hz]]\n"
@@ -1342,7 +1346,11 @@ void usage(void)
 		"\t[-B Broadcast notch enable (default: disabled)\n"
 		"\t[-D DAB notch enable (default: disabled)\n"
 		"\t[-F RF notch enable (default: disabled)\n"
-		"\t[-b Sample bit-depth (8/16 default: 8)\n");
+		"\t[-b Sample bit-depth (8/16 default: 8)\n"
+        "\t[-r Gain reduction (default: 44  / values 20-59)]\n"
+		"\t[-l LNA state/level, about -6dB each step (default: 0 / values 0-0)]\n"
+		"\t[-g Auto Gain Control setpoint (default: -30)]\n"
+		);
 	exit(1);
 }
 
@@ -1392,6 +1400,10 @@ int main(int argc, char **argv)
 		case 'l':
 			rspLNAParameter = atoi(optarg);
 			rspLNAParameterPresent = 1;
+			break;
+		case 'g':
+			AGCSetpointParameter = atoi(optarg);
+			AGCSetpointParameterPresent = 1;
 			break;
 		case 'f':
 			frequency = (uint32_t)atofs(optarg);
