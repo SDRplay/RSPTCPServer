@@ -424,6 +424,9 @@ static int rspLNAParameter = 0;
 static int AGCSetpointParameterPresent = 0;
 static int AGCSetpointParameter = 0;
 static int sample_shift = 2;
+static int agc_overload_detected_reported = 0;
+static int agc_overload_corrected_reported = 0;
+
 
 // *************************************
 
@@ -488,12 +491,18 @@ void event_callback(sdrplay_api_EventT eventId, sdrplay_api_TunerSelectT tunerS,
 
 		if (params->powerOverloadParams.powerOverloadChangeType == sdrplay_api_Overload_Detected)
 		{
-			fprintf(stderr, "adc overload detected\n");
+			if (!agc_overload_detected_reported) {
+				fprintf(stderr, "adc overload detected.  This message will be output only once to avoid spamming.\n");
+				agc_overload_detected_reported = 1;
+			}
 			overload = 1;
 		}
 		else if (params->powerOverloadParams.powerOverloadChangeType == sdrplay_api_Overload_Corrected)
 		{
-			fprintf(stderr, "adc overload corrected\n");
+			if (!agc_overload_corrected_reported) {
+				fprintf(stderr, "adc overload corrected.  This message will be output only once to avoid spamming.\n");
+				agc_overload_corrected_reported = 1;
+			}
 			overload = 0;
 		}
 		break;
