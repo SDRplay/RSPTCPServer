@@ -1350,7 +1350,7 @@ void usage(void)
         "\t[-r Gain reduction (default: 40  / values 20-59)]\n"
 		"\t[-l LNA state/level, about -6dB each step (default: 0 / values 0-0)]\n"
 		"\t[-x Auto Gain Control disable (default: enabled)]\n"
-		"\t[-G Auto Gain Control setpoint in dB (default: -30)\n"
+		"\t[-g Auto Gain Control setpoint in dB (default: -30)\n"
 		);
 	exit(1);
 }
