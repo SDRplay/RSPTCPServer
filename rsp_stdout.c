@@ -1349,7 +1349,8 @@ void usage(void)
 		"\t[-b Sample bit-depth (8/16 default: 8)\n"
         "\t[-r Gain reduction (default: 40  / values 20-59)]\n"
 		"\t[-l LNA state/level, about -6dB each step (default: 0 / values 0-0)]\n"
-		"\t[-g Auto Gain Control setpoint (default: -30)]\n"
+		"\t[-x Auto Gain Control disable (default: enabled)]\n"
+		"\t[-G Auto Gain Control setpoint in dB (default: -30)\n"
 		);
 	exit(1);
 }
@@ -1382,7 +1383,7 @@ int main(int argc, char **argv)
 
 	fprintf(stderr, "rsp_stdout version %d.%d\n\n", RSP_TCP_VERSION_MAJOR, RSP_TCP_VERSION_MINOR);
 
-	while ((opt = getopt(argc, argv, "a:p:f:b:s:n:d:P:r:l:g:TvADBFRE")) != -1) {
+	while ((opt = getopt(argc, argv, "a:p:f:b:s:n:d:P:r:l:g:TvADBFREx")) != -1) {
 		switch (opt) {
 		case 'd':
 			device = atoi(optarg) - 1;
@@ -1404,6 +1405,9 @@ int main(int argc, char **argv)
 		case 'g':
 			AGCSetpointParameter = atoi(optarg);
 			AGCSetpointParameterPresent = 1;
+			break;
+		case 'x':
+			agc_state = 0;
 			break;
 		case 'f':
 			frequency = (uint32_t)atofs(optarg);
