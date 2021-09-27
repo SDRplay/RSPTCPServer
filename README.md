@@ -50,7 +50,7 @@ As the rtl_tcp protocol is only 8 bits IQ, man will loose the major advantage of
   sudo make install
 ```
 ## NOTES
- - a RSP API version >=2.13 must be installed on the linux server, see [sdrplay linux downloads](https://www.sdrplay.com/downloads/)
+ - a RSP API version >=3.07 must be installed on the linux server, see [sdrplay linux downloads](https://www.sdrplay.com/downloads/)
  - I try it with [SDR#](https://airspy.com/download/) frontend only. Other tests are welcome.
  - It should compile and run on Raspbian (raspberry pi) (not tested)
  - It should compile on windows as the initial code from rtl_tcp does
