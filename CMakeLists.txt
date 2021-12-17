@@ -22,6 +22,7 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 set(CMAKE_C_FLAGS "-Wall")
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -ggdb")
 add_definitions(-D_GNU_SOURCE)
+add_definitions(-DSERVER_NAME="${PROJECT_NAME}")
 add_definitions(-DSERVER_VERSION="${PROJECT_VERSION}")
 include_directories(${LIBSDRPLAY_INCLUDE_DIRS})
 
