@@ -6,7 +6,7 @@ Note: This build needs the updated ExtIO control panel (https://www.sdrplay.com/
 
 This is a fork of the original rsp_tcp by F4FHH Nicolas with extensions to support all current RSP devices. Use the extended mode to access the full bit rate of the RSP and all of the RSP specific controls. By default the server supports the RTL TCP protocol.
 
-February 2019: Added support for SDRplay API 3.07 (support all RSPs including RSPdx)
+January 2025: Support for RSP1B and RSPdxR2 was added, so SDRplay API 3.15 is required at a minimum.
 
 (c)2018 F4FHH Nicolas (f4fhh@ducor.fr). Licensed under the GNU GPL V3
 
