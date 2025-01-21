@@ -224,13 +224,43 @@ const uint8_t rspdx_lband_gains_ifgains[]     = { 59,55,52,48,44,40,43,42,41,41,
 const uint8_t rspdx_hiz_gains_lnastates[]     = { 18,18,18,18,18,18,17,16,14,13,12,11,10, 9, 7, 6, 5, 5, 5, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0 };
 const uint8_t rspdx_hiz_gains_ifgains[]       = { 59,55,52,48,45,41,41,40,43,42,42,41,41,40,42,42,47,44,40,43,42,42,41,38,34,31,27,24,20 };
 
+const uint8_t rsp1b_am_gains_lnastates[]      = {  6, 6, 6, 6, 6, 6, 5, 5, 5, 5, 5, 4, 4, 3, 3, 3, 3, 3, 2, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0 };
+const uint8_t rsp1b_am_gains_ifgains[]        = { 59,55,52,48,45,41,57,53,49,46,42,44,40,56,52,48,45,41,44,40,43,45,41,38,34,31,27,24,20 };
+const uint8_t rsp1b_vhf_gains_lnastates[]     = {  9, 9, 9, 9, 9, 9, 8, 7, 7, 7, 7, 7, 6, 6, 5, 5, 4, 3, 2, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0 };
+const uint8_t rsp1b_vhf_gains_ifgains[]       = { 59,55,52,48,45,41,42,58,54,51,47,43,46,42,44,41,43,42,44,40,43,45,42,38,34,31,27,24,20 };
+const uint8_t rsp1b_band3_gains_lnastates[]   = {  9, 9, 9, 9, 9, 9, 8, 7, 7, 7, 7, 7, 6, 6, 5, 5, 4, 3, 2, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0 };
+const uint8_t rsp1b_band3_gains_ifgains[]     = { 59,55,52,48,45,41,42,58,54,51,47,43,46,42,44,41,43,42,44,40,43,45,42,38,34,31,27,24,20 };
+const uint8_t rsp1b_bandx_gains_lnastates[]   = {  9, 9, 9, 9, 9, 9, 8, 7, 7, 7, 7, 7, 6, 6, 5, 5, 4, 3, 2, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0 };
+const uint8_t rsp1b_bandx_gains_ifgains[]     = { 59,55,52,48,45,41,42,58,54,51,47,43,46,42,44,41,43,42,44,40,43,45,42,38,34,31,27,24,20 };
+const uint8_t rsp1b_band45_gains_lnastates[]  = {  9, 9, 9, 9, 9, 9, 8, 8, 8, 8, 8, 7, 6, 6, 5, 5, 4, 4, 2, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0 };
+const uint8_t rsp1b_band45_gains_ifgains[]    = { 59,55,52,48,44,41,56,52,49,45,41,44,46,42,45,41,44,40,44,40,42,46,42,38,35,31,27,24,20 };
+const uint8_t rsp1b_lband_gains_lnastates[]   = {  8, 8, 8, 8, 8, 8, 7, 7, 7, 7, 7, 6, 5, 5, 4, 4, 3, 2, 2, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0 };
+const uint8_t rsp1b_lband_gains_ifgains[]     = { 59,55,52,48,45,41,56,53,49,46,42,43,46,42,44,41,43,48,44,40,43,45,42,38,34,31,27,24,20 };
+
+const uint8_t rspdxr2_am_gains_lnastates[]      = { 18,18,18,18,18,18,17,16,14,13,12,11,10, 9, 7, 6, 5, 5, 5, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0 };
+const uint8_t rspdxr2_am_gains_ifgains[]        = { 59,55,52,48,45,41,41,40,43,42,42,41,41,40,42,42,47,44,40,43,42,42,41,38,34,31,27,24,20 };
+const uint8_t rspdxr2_vhf_gains_lnastates[]     = { 26,26,26,26,26,25,23,22,20,19,17,16,14,13,11,10, 8, 7, 5, 5, 5, 3, 2, 0, 0, 0, 0, 0, 0 };
+const uint8_t rspdxr2_vhf_gains_ifgains[]       = { 59,55,50,46,41,40,42,40,42,40,42,41,42,41,43,41,43,41,49,45,40,42,40,42,38,33,29,24,20 };
+const uint8_t rspdxr2_band3_gains_lnastates[]   = { 26,26,26,26,26,25,23,22,20,19,17,16,14,13,11,10, 8, 7, 5, 5, 5, 3, 2, 0, 0, 0, 0, 0, 0 };
+const uint8_t rspdxr2_band3_gains_ifgains[]     = { 59,55,50,46,41,40,42,40,42,40,42,41,42,41,43,41,43,41,49,45,40,42,40,42,38,33,29,24,20 };
+const uint8_t rspdxr2_bandx_gains_lnastates[]   = { 27,27,27,27,27,26,24,23,21,20,18,17,15,14,12,11, 9, 8, 6, 6, 5, 3, 2, 0, 0, 0, 0, 0, 0 };
+const uint8_t rspdxr2_bandx_gains_ifgains[]     = { 59,55,50,46,41,40,42,40,42,40,42,41,42,41,43,41,43,41,46,42,40,42,40,42,38,33,29,24,20 };
+const uint8_t rspdxr2_band45_gains_lnastates[]  = { 20,20,20,20,20,20,18,17,16,14,13,12,11, 9, 8, 7, 7, 5, 4, 3, 2, 0, 0, 0, 0, 0, 0, 0, 0 };
+const uint8_t rspdxr2_band45_gains_ifgains[]    = { 59,55,51,48,44,40,42,42,41,43,42,41,41,43,42,44,40,43,42,41,40,46,43,39,35,31,28,24,20 };
+const uint8_t rspdxr2_lband_gains_lnastates[]   = { 18,18,18,18,18,18,16,15,14,13,11,10, 9, 8, 7, 6, 6, 6, 5, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0 };
+const uint8_t rspdxr2_lband_gains_ifgains[]     = { 59,55,52,48,44,40,43,42,41,41,43,42,41,41,40,48,45,41,40,42,42,41,42,39,35,31,27,24,20 };
+const uint8_t rspdxr2_hiz_gains_lnastates[]     = { 18,18,18,18,18,18,17,16,14,13,12,11,10, 9, 7, 6, 5, 5, 5, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0 };
+const uint8_t rspdxr2_hiz_gains_ifgains[]       = { 59,55,52,48,45,41,41,40,43,42,42,41,41,40,42,42,47,44,40,43,42,42,41,38,34,31,27,24,20 };
+
 typedef enum {
 	RSP_MODEL_UNKNOWN = 0,
 	RSP_MODEL_RSP1 = 1,
 	RSP_MODEL_RSP1A = 2,
 	RSP_MODEL_RSP2 = 3,
 	RSP_MODEL_RSPDUO = 4,
-	RSP_MODEL_RSPDX = 5
+	RSP_MODEL_RSPDX = 5,
+	RSP_MODEL_RSP1B = 6,
+	RSP_MODEL_RSPDXR2 = 7
 } rsp_model_t;
 
 typedef enum {
@@ -421,6 +451,65 @@ static rsp_capabilities_t device_caps[] = {
 		.hiz_lna_states = rspdx_hiz_gains_lnastates,
 		.hiz_if_gains = rspdx_hiz_gains_ifgains,
 	},
+	{
+		.model = RSP_MODEL_RSP1B,
+		.name = "RSP1B",
+		.antenna_input_count = 1,
+		.third_antenna_name = "",
+		.third_antenna_freq_limit = 0,
+		.tuner_count = 1,
+		.capabilities = RSP_CAPABILITY_AGC |
+						RSP_CAPABILITY_BIAS_T |
+						RSP_CAPABILITY_DAB_NOTCH |
+						RSP_CAPABILITY_BROADCAST_NOTCH,
+		.min_ifgr = 20,
+		.max_ifgr = 59,
+
+		.am_lna_states = rsp1b_am_gains_lnastates,
+		.am_if_gains = rsp1b_am_gains_ifgains,
+		.vhf_lna_states = rsp1b_vhf_gains_lnastates,
+		.vhf_if_gains = rsp1b_vhf_gains_ifgains,
+		.band3_lna_states = rsp1b_band3_gains_lnastates,
+		.band3_if_gains = rsp1b_band3_gains_ifgains,
+		.bandx_lna_states = rsp1b_bandx_gains_lnastates,
+		.bandx_if_gains = rsp1b_bandx_gains_ifgains,
+		.band45_lna_states = rsp1b_band45_gains_lnastates,
+		.band45_if_gains = rsp1b_band45_gains_ifgains,
+		.lband_lna_states = rsp1b_lband_gains_lnastates,
+		.lband_if_gains = rsp1b_lband_gains_ifgains,
+		.hiz_lna_states = NULL,
+		.hiz_if_gains = NULL,
+	},
+	{
+		.model = RSP_MODEL_RSPDXR2,
+		.name = "RSPdx-R2",
+		.antenna_input_count = 3,
+		.third_antenna_name = "Antenna C",
+		.third_antenna_freq_limit = 200000000,
+		.tuner_count = 1,
+		.capabilities = RSP_CAPABILITY_AGC |
+						RSP_CAPABILITY_BIAS_T |
+						RSP_CAPABILITY_DAB_NOTCH |
+						RSP_CAPABILITY_BROADCAST_NOTCH |
+						RSP_CAPABILITY_REF_IN,
+		.min_ifgr = 20,
+		.max_ifgr = 59,
+
+		.am_lna_states = rspdxr2_am_gains_lnastates,
+		.am_if_gains = rspdxr2_am_gains_ifgains,
+		.vhf_lna_states = rspdxr2_vhf_gains_lnastates,
+		.vhf_if_gains = rspdxr2_vhf_gains_ifgains,
+		.band3_lna_states = rspdxr2_band3_gains_lnastates,
+		.band3_if_gains = rspdxr2_band3_gains_ifgains,
+		.bandx_lna_states = rspdxr2_bandx_gains_lnastates,
+		.bandx_if_gains = rspdxr2_bandx_gains_ifgains,
+		.band45_lna_states = rspdxr2_band45_gains_lnastates,
+		.band45_if_gains = rspdxr2_band45_gains_ifgains,
+		.lband_lna_states = rspdxr2_lband_gains_lnastates,
+		.lband_if_gains = rspdxr2_lband_gains_ifgains,
+		.hiz_lna_states = rspdxr2_hiz_gains_lnastates,
+		.hiz_if_gains = rspdxr2_hiz_gains_ifgains,
+	},
 };
 
 static int extended_mode = 0;
@@ -518,6 +607,12 @@ void event_callback(sdrplay_api_EventT eventId, sdrplay_api_TunerSelectT tunerS,
 	case sdrplay_api_RspDuoModeChange:
 		printf("RSPduo mode changed\n");
 		break;
+	case sdrplay_api_DeviceFailure:
+		printf("RSP failure\n");
+		sdrplay_api_Uninit(chosenDev->dev);
+		sdrplay_api_ReleaseDevice(chosenDev);
+		sdrplay_api_Close();
+		exit(1);
 	}
 }
 
@@ -753,16 +848,20 @@ static rsp_model_t hardware_ver_to_model(int hw_version)
 	// Convert hardware version from library to internal enumerated type
 	switch (hw_version)
 	{
-	case 1:
+	case SDRPLAY_RSP1_ID:
 		return RSP_MODEL_RSP1;
-	case 255:
+	case SDRPLAY_RSP1A_ID:
 		return RSP_MODEL_RSP1A;
-	case 2:
+	case SDRPLAY_RSP2_ID:
 		return RSP_MODEL_RSP2;
-	case 3:
+	case SDRPLAY_RSPduo_ID:
 		return RSP_MODEL_RSPDUO;
-	case 4:
+	case SDRPLAY_RSPdx_ID:
 		return RSP_MODEL_RSPDX;
+	case SDRPLAY_RSP1B_ID:
+		return RSP_MODEL_RSP1B;
+	case SDRPLAY_RSPdxR2_ID:
+		return RSP_MODEL_RSPDXR2;
 	default:
 		return RSP_MODEL_UNKNOWN;
 	}
@@ -819,6 +918,10 @@ static const char* model_to_string(rsp_model_t model)
 		return "RSPduo";
 	case RSP_MODEL_RSPDX:
 		return "RSPdx";
+	case RSP_MODEL_RSP1B:
+		return "RSP1B";
+	case RSP_MODEL_RSPDXR2:
+		return "RSPdx-R2";
 	default:
 		return "Unknown";
 	}
@@ -1038,6 +1141,24 @@ static int set_bias_t(unsigned int enable)
 		}
 		break;
 
+	case RSP_MODEL_RSP1B:
+		chParams->rsp1aTunerParams.biasTEnable = enable;
+
+		r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Rsp1a_BiasTControl, sdrplay_api_Update_Ext1_None);
+		if (r != sdrplay_api_Success) {
+			printf("bias-t control error (%d)\n", r);
+		}
+		break;
+
+	case RSP_MODEL_RSPDXR2:
+		deviceParams->devParams->rspDxParams.biasTEnable = enable;
+
+		r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_None, sdrplay_api_Update_RspDx_BiasTControl);
+		if (r != sdrplay_api_Success) {
+			printf("bias-t control error (%d)\n", r);
+		}
+		break;
+
 	default:
 		if (verbose) {
 			printf("bias-t not supported\n");
@@ -1083,7 +1204,7 @@ static int set_refclock_output(unsigned int enable)
 
 static int set_antenna_input(unsigned int antenna)
 {
-	if (hardware_model == RSP_MODEL_RSP2 || hardware_model == RSP_MODEL_RSPDUO || hardware_model == RSP_MODEL_RSPDX)
+	if (hardware_model == RSP_MODEL_RSP2 || hardware_model == RSP_MODEL_RSPDUO || hardware_model == RSP_MODEL_RSPDX || hardware_model == RSP_MODEL_RSPDXR2)
 	{
 		int r;
 		sdrplay_api_ReasonForUpdateT reason1 = sdrplay_api_Update_None;
@@ -1115,7 +1236,12 @@ static int set_antenna_input(unsigned int antenna)
 					reason1 = sdrplay_api_Update_RspDuo_AmPortSelect;
 				}
 			}
-			else // RSP_MODEL_RSPDX
+			else if (hardware_model == RSP_MODEL_RSPDX)
+			{
+				deviceParams->devParams->rspDxParams.antennaSel = sdrplay_api_RspDx_ANTENNA_A;
+				reason2 = sdrplay_api_Update_RspDx_AntennaControl;
+			}
+			else if (hardware_model == RSP_MODEL_RSPDXR2)
 			{
 				deviceParams->devParams->rspDxParams.antennaSel = sdrplay_api_RspDx_ANTENNA_A;
 				reason2 = sdrplay_api_Update_RspDx_AntennaControl;
@@ -1143,7 +1269,12 @@ static int set_antenna_input(unsigned int antenna)
 					chParams = deviceParams->rxChannelB;
 				}
 			}
-			else // RSP_MODEL_RSPDX
+			else if (hardware_model == RSP_MODEL_RSPDX)
+			{
+				deviceParams->devParams->rspDxParams.antennaSel = sdrplay_api_RspDx_ANTENNA_B;
+				reason2 = sdrplay_api_Update_RspDx_AntennaControl;
+			}
+			else if (hardware_model == RSP_MODEL_RSPDXR2)
 			{
 				deviceParams->devParams->rspDxParams.antennaSel = sdrplay_api_RspDx_ANTENNA_B;
 				reason2 = sdrplay_api_Update_RspDx_AntennaControl;
@@ -1180,7 +1311,15 @@ static int set_antenna_input(unsigned int antenna)
 					reason1 = sdrplay_api_Update_Rsp2_AmPortSelect;
 				}
 			}
-			else // RSP_MODEL_RSPDX
+			else if (hardware_model == RSP_MODEL_RSPDX)
+			{
+				if (current_frequency < 200000000)
+				{
+					deviceParams->devParams->rspDxParams.antennaSel = sdrplay_api_RspDx_ANTENNA_C;
+					reason2 = sdrplay_api_Update_RspDx_AntennaControl;
+				}
+			}
+			else if (hardware_model == RSP_MODEL_RSPDXR2)
 			{
 				if (current_frequency < 200000000)
 				{
@@ -1271,6 +1410,32 @@ static int set_notch_filters(unsigned int notch)
 		break;
 
 	case RSP_MODEL_RSPDX:
+		deviceParams->devParams->rspDxParams.rfDabNotchEnable = dab_notch;
+		r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_None, sdrplay_api_Update_RspDx_RfDabNotchControl);
+		if (r != sdrplay_api_Success) {
+			printf("set dab notch error (%d)\n", r);
+		}
+		deviceParams->devParams->rspDxParams.rfNotchEnable = bc_notch;
+		r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_None, sdrplay_api_Update_RspDx_RfNotchControl);
+		if (r != sdrplay_api_Success) {
+			printf("set broadcast notch error (%d)\n", r);
+		}
+		break;
+
+	case RSP_MODEL_RSP1B:
+		deviceParams->devParams->rsp1aParams.rfDabNotchEnable = dab_notch;
+		r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Rsp1a_RfDabNotchControl, sdrplay_api_Update_Ext1_None);
+		if (r != sdrplay_api_Success) {
+			printf("set dab notch error (%d)\n", r);
+		}
+		deviceParams->devParams->rsp1aParams.rfNotchEnable = bc_notch;
+		r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_Rsp1a_RfNotchControl, sdrplay_api_Update_Ext1_None);
+		if (r != sdrplay_api_Success) {
+			printf("set broadcast notch error (%d)\n", r);
+		}
+		break;
+
+	case RSP_MODEL_RSPDXR2:
 		deviceParams->devParams->rspDxParams.rfDabNotchEnable = dab_notch;
 		r = sdrplay_api_Update(chosenDev->dev, chosenDev->tuner, sdrplay_api_Update_None, sdrplay_api_Update_RspDx_RfDabNotchControl);
 		if (r != sdrplay_api_Success) {
